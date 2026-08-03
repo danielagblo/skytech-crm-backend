@@ -27,6 +27,11 @@ public class AutomationController extends BaseController {
     return ok(automation.create(r));
   }
 
+  @GetMapping("/options")
+  ApiResponse<?> options() {
+    return ok(automation.options());
+  }
+
   @GetMapping("/birthday-configs")
   ApiResponse<?> birthday(@PageableDefault(size = 20) Pageable p) {
     return ok(automation.type(AutomationType.BIRTHDAY, p));

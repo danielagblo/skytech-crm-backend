@@ -2,6 +2,7 @@ package com.skytech.crm.service;
 
 import com.skytech.crm.dto.request.AutomationRequest;
 import com.skytech.crm.dto.response.AutomationResponse;
+import com.skytech.crm.dto.response.AutomationOptionsResponse;
 import com.skytech.crm.entity.*;
 import com.skytech.crm.enums.*;
 import com.skytech.crm.exception.ResourceNotFoundException;
@@ -28,6 +29,23 @@ public class AutomationService {
   public Page<AutomationResponse> list(Pageable p) {
     gates.require(current.get(), Feature.AUTOMATION_BUILDER);
     return automations.findAll(p).map(mapper::automation);
+  }
+
+  @Transactional(readOnly = true)
+  public AutomationOptionsResponse options() {
+    gates.require(current.get(), Feature.AUTOMATION_BUILDER);
+    return new AutomationOptionsResponse(
+        List.of(
+            new AutomationOptionsResponse.TypeOption(
+                AutomationType.BIRTHDAY, true, "LEAD_BIRTHDAY", List.of()),
+            new AutomationOptionsResponse.TypeOption(
+                AutomationType.PUBLIC_HOLIDAY, true, "DATE", List.of("date")),
+            new AutomationOptionsResponse.TypeOption(
+                AutomationType.PAYMENT, true, "DEAL_PAYMENT_RECORDED", List.of()),
+            new AutomationOptionsResponse.TypeOption(
+                AutomationType.PERSONAL, false, "NOT_CONFIGURED", List.of())),
+        List.of("SMS", "EMAIL", "BOTH"),
+        List.of("channel", "subject", "message"));
   }
 
   @Transactional
@@ -93,10 +111,39 @@ public class AutomationService {
   }
 
   private void apply(Automation a, AutomationRequest r) {
+    validate(r);
     a.setAutomationType(r.getAutomationType());
     a.setName(r.getName());
     if (r.getActive() != null) a.setActive(r.getActive());
     a.setTriggerConfig(r.getTriggerConfig() == null ? Map.of() : r.getTriggerConfig());
     a.setSteps(r.getSteps() == null ? List.of() : r.getSteps());
+  }
+
+  private void validate(AutomationRequest request) {
+    if (request.getAutomationType() == AutomationType.PUBLIC_HOLIDAY) {
+      Object date =
+          request.getTriggerConfig() == null ? null : request.getTriggerConfig().get("date");
+      if (date == null || String.valueOf(date).isBlank())
+        throw new IllegalArgumentException(
+            "Public holiday automations require triggerConfig.date in YYYY-MM-DD format");
+      try {
+        java.time.LocalDate.parse(String.valueOf(date));
+      } catch (java.time.format.DateTimeParseException exception) {
+        throw new IllegalArgumentException(
+            "Public holiday triggerConfig.date must use YYYY-MM-DD format");
+      }
+    }
+    if (request.getSteps() == null) return;
+    for (int index = 0; index < request.getSteps().size(); index++) {
+      Map<String, Object> step = request.getSteps().get(index);
+      if (step == null) throw new IllegalArgumentException("Automation step " + index + " is required");
+      String channel = String.valueOf(step.getOrDefault("channel", step.get("type"))).toUpperCase();
+      if (!Set.of("SMS", "EMAIL", "BOTH").contains(channel))
+        throw new IllegalArgumentException(
+            "Automation step " + index + " channel must be SMS, EMAIL, or BOTH");
+      Object message = step.containsKey("message") ? step.get("message") : step.get("body");
+      if (message == null || String.valueOf(message).isBlank())
+        throw new IllegalArgumentException("Automation step " + index + " requires a message");
+    }
   }
 }
