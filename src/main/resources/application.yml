@@ -23,9 +23,9 @@ spring:
     enabled: true
     locations: classpath:db/migration
   mail:
-    host: ${MAIL_HOST:localhost}
+    host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
+    username: ${MAIL_USERNAME:info@skytechghana.com}
     password: ${MAIL_PASSWORD:}
     properties.mail.smtp.auth: true
     properties.mail.smtp.starttls.enable: true
@@ -42,10 +42,15 @@ jwt:
   secret: ${JWT_SECRET}
   access-token-expiry-ms: 900000
   refresh-token-expiry-ms: 604800000
-twilio:
-  account-sid: ${TWILIO_ACCOUNT_SID:}
-  auth-token: ${TWILIO_AUTH_TOKEN:}
-  from-number: ${TWILIO_FROM_NUMBER:}
+communication:
+  sms-provider: ${COMMUNICATION_SMS_PROVIDER:arkesel}
+arkesel:
+  sms:
+    api-url: ${ARKESEL_SMS_API_URL:https://sms.arkesel.com/api/v2/sms/send}
+    api-key: ${ARKESEL_SMS_API_KEY:}
+    sender-id: ${ARKESEL_SMS_SENDER_ID:Skytech}
+    sandbox: ${ARKESEL_SMS_SANDBOX:false}
+    default-country-code: ${ARKESEL_DEFAULT_COUNTRY_CODE:233}
 stripe:
   secret-key: ${STRIPE_SECRET_KEY:}
 cors:
@@ -53,14 +58,14 @@ cors:
 app:
   time-zone: ${APP_TIME_ZONE:Africa/Accra}
 mail:
-  host: ${MAIL_HOST:localhost}
+  host: ${MAIL_HOST:smtp.gmail.com}
   port: ${MAIL_PORT:587}
-  username: ${MAIL_USERNAME:}
+  username: ${MAIL_USERNAME:info@skytechghana.com}
   password: ${MAIL_PASSWORD:}
-  from: ${MAIL_FROM:}
+  from: ${MAIL_FROM:info@skytechghana.com}
 invoice:
   issuer-name: ${INVOICE_ISSUER_NAME:Skytech}
-  issuer-email: ${INVOICE_ISSUER_EMAIL:}
+  issuer-email: ${INVOICE_ISSUER_EMAIL:info@skytechghana.com}
   issuer-phone: ${INVOICE_ISSUER_PHONE:}
   issuer-address: ${INVOICE_ISSUER_ADDRESS:}
   issuer-tax-id: ${INVOICE_ISSUER_TAX_ID:}

@@ -16,7 +16,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties({JwtConfig.class, StripeConfig.class, InvoiceConfig.class})
+@EnableConfigurationProperties({
+  JwtConfig.class,
+  StripeConfig.class,
+  InvoiceConfig.class,
+  ArkeselSmsConfig.class
+})
 @RequiredArgsConstructor
 public class SecurityConfig {
   private final JwtAuthenticationFilter jwt;
