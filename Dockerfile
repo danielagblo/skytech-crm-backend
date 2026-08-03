@@ -6,9 +6,11 @@ COPY src ./src
 RUN mvn -B clean package -DskipTests
 
 FROM eclipse-temurin:21-jre
-RUN useradd --system --uid 10001 skytech
+RUN groupadd --system --gid 10001 skytech \
+    && useradd --system --uid 10001 --gid skytech --no-create-home skytech
 WORKDIR /app
-COPY --from=build /workspace/target/skytech-crm-1.0.0.jar app.jar
+RUN mkdir -p /app/uploads/profiles && chown -R skytech:skytech /app
+COPY --from=build --chown=skytech:skytech /workspace/target/skytech-crm-1.0.0.jar app.jar
 USER skytech
 EXPOSE 8080
 ENTRYPOINT ["java","-jar","/app/app.jar"]

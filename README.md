@@ -36,6 +36,7 @@ Flyway runs automatically on startup and owns the schema. The configured Hiberna
 | `DB_POOL_MAX_SIZE` | no | Maximum Hikari connections per app instance; defaults to `5` |
 | `DB_POOL_MIN_IDLE` | no | Minimum idle Hikari connections; defaults to `1` |
 | `DB_CONNECTION_TIMEOUT_MS` | no | Database connection timeout; defaults to `30000` ms |
+| `PORT` | no | HTTP port supplied by the hosting platform; defaults to `8080` |
 | `JWT_SECRET` | yes | HMAC key, minimum 32 random bytes |
 | `CORS_ALLOWED_ORIGINS` | no | Comma-separated frontend origins; defaults to `http://localhost:3000` |
 | `TWILIO_ACCOUNT_SID` | for SMS | Twilio account SID |
@@ -43,6 +44,8 @@ Flyway runs automatically on startup and owns the schema. The configured Hiberna
 | `TWILIO_FROM_NUMBER` | for SMS | Twilio sender number |
 | `MAIL_HOST` / `MAIL_PORT` | for email | SMTP endpoint |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | for email | SMTP credentials |
+| `MAIL_FROM` | for email | Verified sender address, such as `noreply@example.com` |
+| `MAIL_HEALTH_ENABLED` | no | Enables the SMTP health probe after email is configured; defaults to `false` |
 | `STRIPE_SECRET_KEY` | no | Reserved for the inactive billing integration |
 | `APP_TIME_ZONE` | no | Scheduler time zone; defaults to `Africa/Accra` |
 
@@ -122,7 +125,7 @@ Complete every item below before exposing the API to real users.
 
 3. **Configure every production environment variable.** Set `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`, and `APP_TIME_ZONE`. Configure the Twilio and mail variables before the first login because OTP delivery requires at least one working channel. `CORS_ALLOWED_ORIGINS` must contain only the real HTTPS frontend origins, comma-separated, with no wildcard.
 
-4. **Configure email delivery.** Create an SMTP account with a transactional provider, verify the sending domain, publish its SPF and DKIM DNS records, and set `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, and `MAIL_PASSWORD`. Send a real OTP email and verify delivery, spam placement, and sender identity.
+4. **Configure email delivery.** Create an SMTP account with a transactional provider, verify the sending domain, publish its SPF and DKIM DNS records, and set `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, and `MAIL_FROM`. `MAIL_FROM` must be an address accepted by the provider. Set `MAIL_HEALTH_ENABLED=true` only after the SMTP credentials work, then send a real OTP email and verify delivery, spam placement, and sender identity. Email may remain unconfigured for a private demo; delivery failures are logged without stopping the application.
 
 5. **Configure Twilio SMS.** Create or select the Twilio production account, obtain an SMS-capable sender number, complete any country-specific sender registration, and set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER`. Send test OTP and broadcast messages to opted-in test numbers. Confirm consent, opt-out, and local messaging-law requirements before bulk sending.
 
