@@ -45,6 +45,12 @@ Flyway runs automatically on startup and owns the schema. The configured Hiberna
 | `MAIL_HOST` / `MAIL_PORT` | for email | SMTP endpoint |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | for email | SMTP credentials |
 | `MAIL_FROM` | for email | Verified sender address, such as `noreply@example.com` |
+| `INVOICE_ISSUER_NAME` | yes | Legal/display name frozen into newly created invoices |
+| `INVOICE_ISSUER_EMAIL` | recommended | Issuer contact email printed on invoices |
+| `INVOICE_ISSUER_PHONE` | recommended | Issuer phone printed on invoices |
+| `INVOICE_ISSUER_ADDRESS` | recommended | Issuer address printed on invoices |
+| `INVOICE_ISSUER_TAX_ID` | where applicable | Tax/registration identifier printed on invoices |
+| `INVOICE_PAYMENT_INSTRUCTIONS` | recommended | Bank or payment instructions printed on invoices |
 | `MAIL_HEALTH_ENABLED` | no | Enables the SMTP health probe after email is configured; defaults to `false` |
 | `STRIPE_SECRET_KEY` | no | Reserved for the inactive billing integration |
 | `APP_TIME_ZONE` | no | Scheduler time zone; defaults to `Africa/Accra` |
@@ -52,6 +58,8 @@ Flyway runs automatically on startup and owns the schema. The configured Hiberna
 Outbound failures are logged and do not fail CRM requests. In development, leaving Twilio/SMTP blank is therefore safe, although OTP delivery will only be visible through a configured provider.
 
 The Stripe SDK client is wired from `STRIPE_SECRET_KEY`, but no billing operation invokes it yet. Feature gates intentionally allow all plans until billing is activated.
+
+Invoice and automation frontend request examples, lifecycle rules, PDF handling, and status behavior are documented in [`docs/FRONTEND_INVOICES_AUTOMATIONS.md`](docs/FRONTEND_INVOICES_AUTOMATIONS.md).
 
 ## Run locally
 

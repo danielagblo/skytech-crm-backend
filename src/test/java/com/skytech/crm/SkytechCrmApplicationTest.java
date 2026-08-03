@@ -224,7 +224,18 @@ class SkytechCrmApplicationTest {
             "GET /api/v1/settings",
             "PUT /api/v1/settings",
             "GET /api/v1/settings/lead-assignment",
-            "PUT /api/v1/settings/lead-assignment");
+            "PUT /api/v1/settings/lead-assignment",
+            "GET /api/v1/automations/options",
+            "GET /api/v1/invoices",
+            "POST /api/v1/invoices",
+            "GET /api/v1/invoices/{id}",
+            "PUT /api/v1/invoices/{id}",
+            "DELETE /api/v1/invoices/{id}",
+            "POST /api/v1/invoices/{id}/issue",
+            "GET /api/v1/invoices/{id}/pdf",
+            "POST /api/v1/invoices/{id}/send",
+            "POST /api/v1/invoices/{id}/payments",
+            "POST /api/v1/invoices/{id}/void");
   }
 
   @Test
@@ -247,7 +258,8 @@ class SkytechCrmApplicationTest {
             "/api/v1/automations/payment-workflows",
             "/api/v1/broadcasts",
             "/api/v1/broadcasts/recent-activity",
-            "/api/v1/dashboard/top-deals");
+            "/api/v1/dashboard/top-deals",
+            "/api/v1/invoices");
     Map<String, java.lang.reflect.Method> getMethods = new HashMap<>();
     mappings
         .getHandlerMethods()
