@@ -2,6 +2,8 @@ package com.skytech.crm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.skytech.crm.entity.Lead;
+import jakarta.persistence.Column;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
@@ -55,5 +57,13 @@ class DatabaseContractTest {
                       }))
           .isNotNull();
     }
+  }
+
+  @Test
+  void leadPhoneFieldsMatchFlywayColumnNames() throws Exception {
+    assertThat(Lead.class.getDeclaredField("phone1").getAnnotation(Column.class).name())
+        .isEqualTo("phone_1");
+    assertThat(Lead.class.getDeclaredField("phone2").getAnnotation(Column.class).name())
+        .isEqualTo("phone_2");
   }
 }

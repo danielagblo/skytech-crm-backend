@@ -33,10 +33,10 @@ public class Lead extends BaseEntity {
   @Column(length = 255)
   private String email;
 
-  @Column(length = 30)
+  @Column(name = "phone_1", length = 30)
   private String phone1;
 
-  @Column(length = 30)
+  @Column(name = "phone_2", length = 30)
   private String phone2;
 
   @Column(length = 30)
