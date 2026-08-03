@@ -58,6 +58,13 @@ mail:
   username: ${MAIL_USERNAME:}
   password: ${MAIL_PASSWORD:}
   from: ${MAIL_FROM:}
+invoice:
+  issuer-name: ${INVOICE_ISSUER_NAME:Skytech}
+  issuer-email: ${INVOICE_ISSUER_EMAIL:}
+  issuer-phone: ${INVOICE_ISSUER_PHONE:}
+  issuer-address: ${INVOICE_ISSUER_ADDRESS:}
+  issuer-tax-id: ${INVOICE_ISSUER_TAX_ID:}
+  payment-instructions: ${INVOICE_PAYMENT_INSTRUCTIONS:}
 management:
   health:
     mail:

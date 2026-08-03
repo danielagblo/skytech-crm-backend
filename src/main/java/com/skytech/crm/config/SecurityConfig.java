@@ -16,7 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties({JwtConfig.class, StripeConfig.class})
+@EnableConfigurationProperties({JwtConfig.class, StripeConfig.class, InvoiceConfig.class})
 @RequiredArgsConstructor
 public class SecurityConfig {
   private final JwtAuthenticationFilter jwt;

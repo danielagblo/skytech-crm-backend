@@ -25,6 +25,7 @@
       </exclusions>
     </dependency>
     <dependency><groupId>com.stripe</groupId><artifactId>stripe-java</artifactId><version>29.4.0</version></dependency>
+    <dependency><groupId>org.apache.pdfbox</groupId><artifactId>pdfbox</artifactId><version>3.0.5</version></dependency>
     <dependency><groupId>org.mapstruct</groupId><artifactId>mapstruct</artifactId><version>${mapstruct.version}</version></dependency>
     <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><optional>true</optional></dependency>
     <dependency><groupId>org.projectlombok</groupId><artifactId>lombok-mapstruct-binding</artifactId><version>0.2.0</version><scope>provided</scope></dependency>

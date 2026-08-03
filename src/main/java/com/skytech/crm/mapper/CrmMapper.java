@@ -45,6 +45,16 @@ public interface CrmMapper {
   @Mapping(target = "actorId", source = "actor.id")
   ActivityResponse activity(Activity value);
 
+  @Mapping(target = "dealId", source = "deal.id")
+  @Mapping(target = "createdById", source = "createdBy.id")
+  InvoiceResponse invoice(Invoice value);
+
+  InvoiceResponse.Item invoiceItem(InvoiceItem value);
+
+  @Mapping(target = "dealLogId", source = "dealLog.id")
+  @Mapping(target = "recordedById", source = "recordedBy.id")
+  InvoiceResponse.Payment invoicePayment(InvoicePayment value);
+
   @Mapping(target = "taskId", source = "task.id")
   @Mapping(target = "complete", source = "complete")
   SubTaskResponse subTask(SubTask value);

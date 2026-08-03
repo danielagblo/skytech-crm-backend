@@ -44,7 +44,7 @@ class DatabaseContractTest {
 
   @Test
   void flywayVersionsAreSequential() {
-    for (int version = 1; version <= 4; version++) {
+    for (int version = 1; version <= 5; version++) {
       int current = version;
       assertThat(
               getClass()
@@ -53,7 +53,8 @@ class DatabaseContractTest {
                         case 1 -> "/db/migration/V1__init.sql";
                         case 2 -> "/db/migration/V2__enum_constraints.sql";
                         case 3 -> "/db/migration/V3__deal_call_metrics.sql";
-                        default -> "/db/migration/V4__seed_default_settings.sql";
+                        case 4 -> "/db/migration/V4__seed_default_settings.sql";
+                        default -> "/db/migration/V5__invoices.sql";
                       }))
           .isNotNull();
     }
@@ -65,5 +66,25 @@ class DatabaseContractTest {
         .isEqualTo("phone_1");
     assertThat(Lead.class.getDeclaredField("phone2").getAnnotation(Column.class).name())
         .isEqualTo("phone_2");
+  }
+
+  @Test
+  void invoiceMigrationProvidesLifecycleTablesAndNumbering() throws Exception {
+    String migration;
+    try (var stream = getClass().getResourceAsStream("/db/migration/V5__invoices.sql")) {
+      assertThat(stream).isNotNull();
+      migration = new String(stream.readAllBytes(), StandardCharsets.UTF_8).toLowerCase();
+    }
+    assertThat(migration)
+        .contains("create sequence invoice_number_seq")
+        .contains("create table invoices")
+        .contains("create table invoice_items")
+        .contains("create table invoice_payments")
+        .contains("uuid primary key default gen_random_uuid()")
+        .contains("company_id uuid")
+        .contains("created_at timestamptz default now()")
+        .contains("updated_at timestamptz default now()")
+        .contains("invoices_updated_at")
+        .doesNotContain("serial", "bigserial");
   }
 }
