@@ -1,0 +1,11 @@
+package com.skytech.crm.enums;
+
+public enum Feature {
+  ADVANCED_REPORTS,
+  EXPORT_DATA,
+  BULK_BROADCAST,
+  AUTOMATION_BUILDER,
+  UNLIMITED_LEADS,
+  UNLIMITED_AGENTS,
+  CUSTOM_PIPELINE_STAGES
+}
