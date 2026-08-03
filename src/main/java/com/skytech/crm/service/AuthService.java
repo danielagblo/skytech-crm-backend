@@ -1,5 +1,6 @@
 package com.skytech.crm.service;
 
+import com.skytech.crm.config.AuthenticationConfig;
 import com.skytech.crm.dto.request.AuthRequests;
 import com.skytech.crm.dto.response.*;
 import com.skytech.crm.entity.User;
@@ -27,6 +28,7 @@ public class AuthService {
   private final ActivityService activity;
   private final CrmMapper mapper;
   private final CurrentUserService current;
+  private final AuthenticationConfig authConfig;
 
   @Transactional
   public AuthResponse.Login login(AuthRequests.Login req) {
@@ -35,6 +37,8 @@ public class AuthService {
       activity.logRejectedLogin(u == null ? null : u.getId(), req.email());
       throw new ForbiddenException("Invalid credentials");
     }
+    if (!authConfig.otpEnabled()) return completePasswordLogin(u);
+
     String otp = String.format("%06d", new SecureRandom().nextInt(1_000_000));
     u.setOtpCode(otp);
     u.setOtpExpiresAt(OffsetDateTime.now().plusMinutes(10));
@@ -49,6 +53,19 @@ public class AuthService {
           "Skytech CRM verification code",
           "Your verification code is " + otp + ". It expires in 10 minutes.");
     return new AuthResponse.Login(true, u.getId());
+  }
+
+  private AuthResponse.Login completePasswordLogin(User u) {
+    String access = tokens.access(u);
+    String refresh = tokens.refresh(u);
+    u.setOtpCode(null);
+    u.setOtpExpiresAt(null);
+    u.setRefreshTokenHash(hash(refresh));
+    u.setLastLogin(OffsetDateTime.now());
+    users.save(u);
+    activity.log(
+        u.getId(), ActivityType.LEAD_STAGE_CHANGED, "SYSTEM", u.getId(), "Completed password login");
+    return new AuthResponse.Login(false, u.getId(), access, refresh, mapper.user(u));
   }
 
   @Transactional

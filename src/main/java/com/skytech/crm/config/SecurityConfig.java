@@ -20,7 +20,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
   JwtConfig.class,
   StripeConfig.class,
   InvoiceConfig.class,
-  ArkeselSmsConfig.class
+  ArkeselSmsConfig.class,
+  AuthenticationConfig.class
 })
 @RequiredArgsConstructor
 public class SecurityConfig {

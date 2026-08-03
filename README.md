@@ -38,6 +38,7 @@ Flyway runs automatically on startup and owns the schema. The configured Hiberna
 | `DB_CONNECTION_TIMEOUT_MS` | no | Database connection timeout; defaults to `30000` ms |
 | `PORT` | no | HTTP port supplied by the hosting platform; defaults to `8080` |
 | `JWT_SECRET` | yes | HMAC key, minimum 32 random bytes |
+| `AUTH_OTP_ENABLED` | no | Enables the second login step; temporarily defaults to `false` |
 | `CORS_ALLOWED_ORIGINS` | no | Comma-separated frontend origins; defaults to `http://localhost:3000` |
 | `COMMUNICATION_SMS_PROVIDER` | for SMS | Must be `arkesel` |
 | `ARKESEL_SMS_API_URL` | for SMS | Arkesel v2 send endpoint; defaults to `https://sms.arkesel.com/api/v2/sms/send` |
@@ -84,13 +85,15 @@ No default administrator password is shipped. Create the first user securely usi
 
 ## Authentication
 
-1. `POST /api/v1/auth/login` validates email/password and sends a six-digit OTP.
-2. `POST /api/v1/auth/verify-otp` returns a 15-minute access token and seven-day refresh token.
+1. `POST /api/v1/auth/login` validates email/password. While `AUTH_OTP_ENABLED=false`, it immediately returns `requires_otp: false`, the access token, refresh token, and user.
+2. When `AUTH_OTP_ENABLED=true`, login sends a six-digit OTP and returns `requires_otp: true`; `POST /api/v1/auth/verify-otp` then returns the tokens.
 3. Send `Authorization: Bearer ACCESS_TOKEN` on protected requests.
 4. `POST /api/v1/auth/refresh` rotates access credentials from a valid, non-revoked refresh token.
 5. `POST /api/v1/auth/logout` revokes the stored refresh-token hash.
 
 Role checks are enforced in the service layer. Leads and deals are restricted to assigned agents, while administrators and managers receive the broader views described by the API contract.
+
+The OTP bypass is intended only for the current development/demo period. Re-enable it later by setting `AUTH_OTP_ENABLED=true` in Railway and redeploying; no code rollback is required. The frontend should inspect `data.requires_otp`: when false, store `data.access_token` and `data.refresh_token` and enter the CRM immediately; when true, display the existing OTP screen.
 
 ## Build and test
 
