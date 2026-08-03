@@ -83,8 +83,11 @@ public class DealService {
     if (r.getVersion() != null && !Objects.equals(r.getVersion(), d.getVersion()))
       throw new org.springframework.orm.ObjectOptimisticLockingFailureException(Deal.class, id);
     User originalAssignee = d.getAssignedTo();
+    DealStage originalStage = d.getStage();
     validateLeadAccess(r.getLeadId(), current.get());
     apply(d, r);
+    // Stage transitions must go through stage(), which persists the required transition log.
+    d.setStage(originalStage);
     if (current.get().getRole() == Role.AGENT) d.setAssignedTo(originalAssignee);
     recalculate(d);
     d = deals.save(d);

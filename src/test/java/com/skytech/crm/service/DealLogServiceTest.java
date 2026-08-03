@@ -89,6 +89,37 @@ class DealLogServiceTest {
         .hasMessageContaining("paymentMode");
   }
 
+  @Test
+  void unrelatedTypeSpecificFieldsCannotAlterPaymentTotals() {
+    UUID dealId = UUID.randomUUID();
+    User admin = new User();
+    admin.setId(UUID.randomUUID());
+    admin.setRole(Role.ADMIN);
+    Deal deal = new Deal();
+    deal.setId(dealId);
+    deal.setContractValue(new BigDecimal("1000"));
+    deal.setTotalPaid(new BigDecimal("100"));
+    when(current.get()).thenReturn(admin);
+    when(current.id()).thenReturn(admin.getId());
+    when(deals.findById(dealId)).thenReturn(Optional.of(deal));
+    when(logs.save(any(DealLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    DealLogRequest negotiation =
+        new CreateDealLogRequest()
+            .setLogType("NEGOTIATION")
+            .setContactMode("PHONE_CALL")
+            .setResponseType("POSITIVE")
+            .setAmountPaid(new BigDecimal("900"));
+
+    service.create(dealId, negotiation);
+
+    ArgumentCaptor<DealLog> saved = ArgumentCaptor.forClass(DealLog.class);
+    verify(logs).save(saved.capture());
+    assertThat(saved.getValue().getAmountPaid()).isNull();
+    assertThat(deal.getTotalPaid()).isEqualByComparingTo("100");
+    verify(deals, never()).save(deal);
+  }
+
   private DealLogRequest payment(String amount) {
     return new CreateDealLogRequest()
         .setLogType("PAYMENT")

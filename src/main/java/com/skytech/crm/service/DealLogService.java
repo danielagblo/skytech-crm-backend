@@ -168,27 +168,61 @@ public class DealLogService {
 
   private void apply(DealLog l, DealLogRequest r) {
     l.setLogType(r.getLogType());
-    l.setContactMode(r.getContactMode());
-    l.setResponseType(r.getResponseType());
-    l.setCallDirection(r.getCallDirection());
-    l.setCallDurationSeconds(r.getCallDurationSeconds());
-    l.setCallOutcome(r.getCallOutcome());
-    l.setFollowUpAt(r.getFollowUpAt());
-    l.setSettlementValue(r.getSettlementValue());
-    l.setSettlementFollowUp(r.getSettlementFollowUp());
-    l.setSpecialConditions(r.getSpecialConditions());
-    l.setAmountPaid(r.getAmountPaid());
-    l.setPaymentMode(r.getPaymentMode());
-    l.setInvoiceNumber(r.getInvoiceNumber());
-    l.setReceiptNumber(r.getReceiptNumber());
-    l.setInvoiceIssued(r.getInvoiceIssued());
-    l.setServiceType(r.getServiceType());
-    l.setExpiryDate(r.getExpiryDate());
-    l.setRetentionAmount(r.getRetentionAmount());
-    l.setRetentionInvoice(r.getRetentionInvoice());
-    l.setRetentionReceipt(r.getRetentionReceipt());
+    clearTypeSpecificFields(l);
+    switch (r.getLogType()) {
+      case "NEGOTIATION" -> {
+        l.setContactMode(r.getContactMode());
+        l.setResponseType(r.getResponseType());
+        l.setCallDirection(r.getCallDirection());
+        l.setCallDurationSeconds(r.getCallDurationSeconds());
+        l.setCallOutcome(r.getCallOutcome());
+        l.setFollowUpAt(r.getFollowUpAt());
+      }
+      case "SETTLEMENT" -> {
+        l.setSettlementValue(r.getSettlementValue());
+        l.setSettlementFollowUp(r.getSettlementFollowUp());
+        l.setSpecialConditions(r.getSpecialConditions());
+      }
+      case "PAYMENT" -> {
+        l.setAmountPaid(r.getAmountPaid());
+        l.setPaymentMode(r.getPaymentMode());
+        l.setInvoiceNumber(r.getInvoiceNumber());
+        l.setReceiptNumber(r.getReceiptNumber());
+        l.setInvoiceIssued(r.getInvoiceIssued());
+      }
+      case "CLIENT_RETENTION" -> {
+        l.setServiceType(r.getServiceType());
+        l.setExpiryDate(r.getExpiryDate());
+        l.setRetentionAmount(r.getRetentionAmount());
+        l.setRetentionInvoice(r.getRetentionInvoice());
+        l.setRetentionReceipt(r.getRetentionReceipt());
+      }
+      default -> throw new IllegalArgumentException("Unsupported log type: " + r.getLogType());
+    }
     l.setAutoReviewScore(review(r));
     l.setBody(r.getBody());
+  }
+
+  private void clearTypeSpecificFields(DealLog l) {
+    l.setContactMode(null);
+    l.setResponseType(null);
+    l.setCallDirection(null);
+    l.setCallDurationSeconds(null);
+    l.setCallOutcome(null);
+    l.setFollowUpAt(null);
+    l.setSettlementValue(null);
+    l.setSettlementFollowUp(null);
+    l.setSpecialConditions(null);
+    l.setAmountPaid(null);
+    l.setPaymentMode(null);
+    l.setInvoiceNumber(null);
+    l.setReceiptNumber(null);
+    l.setInvoiceIssued(null);
+    l.setServiceType(null);
+    l.setExpiryDate(null);
+    l.setRetentionAmount(null);
+    l.setRetentionInvoice(null);
+    l.setRetentionReceipt(null);
   }
 
   private void validateTypeSpecificFields(DealLogRequest request) {

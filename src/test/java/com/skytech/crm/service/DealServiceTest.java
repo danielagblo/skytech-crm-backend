@@ -3,6 +3,7 @@ package com.skytech.crm.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.skytech.crm.dto.request.DealRequest;
 import com.skytech.crm.entity.*;
 import com.skytech.crm.enums.*;
 import com.skytech.crm.mapper.CrmMapper;
@@ -53,5 +54,33 @@ class DealServiceTest {
             "DEAL",
             dealId,
             "Moved deal from NEGOTIATION to SETTLEMENT");
+  }
+
+  @Test
+  void generalUpdateCannotBypassStageTransitionLogging() {
+    UUID dealId = UUID.randomUUID();
+    User admin = new User();
+    admin.setId(UUID.randomUUID());
+    admin.setRole(Role.ADMIN);
+    Deal deal = new Deal();
+    deal.setId(dealId);
+    deal.setTitle("Original title");
+    deal.setStage(DealStage.NEGOTIATION);
+    DealRequest request = new DealRequest();
+    request.setTitle("Updated title");
+    request.setStage(DealStage.PAYMENT);
+
+    when(current.get()).thenReturn(admin);
+    when(current.id()).thenReturn(admin.getId());
+    when(deals.findById(dealId)).thenReturn(Optional.of(deal));
+    when(deals.save(deal)).thenReturn(deal);
+
+    service.update(dealId, request);
+
+    assertThat(deal.getTitle()).isEqualTo("Updated title");
+    assertThat(deal.getStage()).isEqualTo(DealStage.NEGOTIATION);
+    verifyNoInteractions(logs);
+    verify(activity)
+        .log(admin.getId(), ActivityType.LEAD_STAGE_CHANGED, "DEAL", dealId, "Updated deal");
   }
 }
