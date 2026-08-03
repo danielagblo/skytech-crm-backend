@@ -1,12 +1,12 @@
 # Skytech CRM Backend
 
-Production-oriented REST API for Skytech CRM, built with Java 21, Spring Boot 3, stateless JWT security, PostgreSQL, Flyway, JPA/Hibernate, MapStruct, Twilio, and JavaMailSender.
+Production-oriented REST API for Skytech CRM, built with Java 21, Spring Boot 3, stateless JWT security, PostgreSQL, Flyway, JPA/Hibernate, MapStruct, Arkesel SMS, and JavaMailSender.
 
 ## Prerequisites
 
 - Java 21
 - A Supabase project (or PostgreSQL 15+ locally)
-- Optional: Twilio and SMTP credentials for real outbound messages
+- Optional for local development: Arkesel SMS and Google Workspace SMTP credentials for real outbound messages
 - Docker, if you prefer a container build
 
 The Maven Wrapper is committed, so a separate Maven installation is not required.
@@ -39,12 +39,15 @@ Flyway runs automatically on startup and owns the schema. The configured Hiberna
 | `PORT` | no | HTTP port supplied by the hosting platform; defaults to `8080` |
 | `JWT_SECRET` | yes | HMAC key, minimum 32 random bytes |
 | `CORS_ALLOWED_ORIGINS` | no | Comma-separated frontend origins; defaults to `http://localhost:3000` |
-| `TWILIO_ACCOUNT_SID` | for SMS | Twilio account SID |
-| `TWILIO_AUTH_TOKEN` | for SMS | Twilio auth token |
-| `TWILIO_FROM_NUMBER` | for SMS | Twilio sender number |
-| `MAIL_HOST` / `MAIL_PORT` | for email | SMTP endpoint |
-| `MAIL_USERNAME` / `MAIL_PASSWORD` | for email | SMTP credentials |
-| `MAIL_FROM` | for email | Verified sender address, such as `noreply@example.com` |
+| `COMMUNICATION_SMS_PROVIDER` | for SMS | Must be `arkesel` |
+| `ARKESEL_SMS_API_URL` | for SMS | Arkesel v2 send endpoint; defaults to `https://sms.arkesel.com/api/v2/sms/send` |
+| `ARKESEL_SMS_API_KEY` | for SMS | Secret Arkesel API key; backend/Railway only |
+| `ARKESEL_SMS_SENDER_ID` | for SMS | Arkesel-approved sender ID, at most 11 characters |
+| `ARKESEL_SMS_SANDBOX` | no | Use `true` while testing and `false` for real delivery |
+| `ARKESEL_DEFAULT_COUNTRY_CODE` | no | Country code added to local numbers; defaults to Ghana `233` |
+| `MAIL_HOST` / `MAIL_PORT` | for email | SMTP endpoint; defaults to `smtp.gmail.com:587` |
+| `MAIL_USERNAME` / `MAIL_PASSWORD` | for email | Google Workspace address and app password |
+| `MAIL_FROM` | for email | Verified sender; defaults to `info@skytechghana.com` |
 | `INVOICE_ISSUER_NAME` | yes | Legal/display name frozen into newly created invoices |
 | `INVOICE_ISSUER_EMAIL` | recommended | Issuer contact email printed on invoices |
 | `INVOICE_ISSUER_PHONE` | recommended | Issuer phone printed on invoices |
@@ -55,7 +58,9 @@ Flyway runs automatically on startup and owns the schema. The configured Hiberna
 | `STRIPE_SECRET_KEY` | no | Reserved for the inactive billing integration |
 | `APP_TIME_ZONE` | no | Scheduler time zone; defaults to `Africa/Accra` |
 
-Outbound failures are logged and do not fail CRM requests. In development, leaving Twilio/SMTP blank is therefore safe, although OTP delivery will only be visible through a configured provider.
+Outbound failures are logged and do not fail CRM requests. In development, leaving the Arkesel API key and SMTP password blank is safe, although OTP delivery will not reach the user. SMS recipients are normalized to international digits; Ghanaian local numbers beginning with `0` use country code `233` by default.
+
+The `info@skytechghana.com` Google Workspace mailbox is intended for OTPs, individual notifications, and invoice delivery. Do not use Gmail for heavy email broadcasts: its daily quotas and anti-abuse controls are unsuitable for bulk campaigns. Select the SMS channel to send bulk campaigns through Arkesel, or move email broadcasts to a dedicated transactional/bulk-email SMTP provider before enabling high-volume email delivery.
 
 The Stripe SDK client is wired from `STRIPE_SECRET_KEY`, but no billing operation invokes it yet. Feature gates intentionally allow all plans until billing is activated.
 
@@ -129,13 +134,13 @@ Complete every item below before exposing the API to real users.
    [Convert]::ToBase64String($bytes)
    ```
 
-   Store the result, database password, Twilio token, SMTP password, and future Stripe key in the deployment platform's encrypted secret manager. Never copy production values into `.env.example`, Git, Docker images, frontend code, tickets, or chat messages.
+   Store the result, database password, Arkesel API key, Google app password, and future Stripe key in the deployment platform's encrypted secret manager. Never copy production values into `.env.example`, Git, Docker images, frontend code, tickets, or chat messages.
 
-3. **Configure every production environment variable.** Set `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`, and `APP_TIME_ZONE`. Configure the Twilio and mail variables before the first login because OTP delivery requires at least one working channel. `CORS_ALLOWED_ORIGINS` must contain only the real HTTPS frontend origins, comma-separated, with no wildcard.
+3. **Configure every production environment variable.** Set `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`, and `APP_TIME_ZONE`. Configure Arkesel and email before the first real login because OTP delivery requires at least one working channel. `CORS_ALLOWED_ORIGINS` must contain only the real HTTPS frontend origins, comma-separated, with no wildcard.
 
-4. **Configure email delivery.** Create an SMTP account with a transactional provider, verify the sending domain, publish its SPF and DKIM DNS records, and set `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, and `MAIL_FROM`. `MAIL_FROM` must be an address accepted by the provider. Set `MAIL_HEALTH_ENABLED=true` only after the SMTP credentials work, then send a real OTP email and verify delivery, spam placement, and sender identity. Email may remain unconfigured for a private demo; delivery failures are logged without stopping the application.
+4. **Configure `info@skytechghana.com` email delivery.** Confirm that the address is a Google Workspace mailbox, enable two-step verification for it, and create a Google app password (Google Account -> Security -> App passwords). In Railway set `MAIL_HOST=smtp.gmail.com`, `MAIL_PORT=587`, `MAIL_USERNAME=info@skytechghana.com`, `MAIL_PASSWORD` to the 16-character app password, and `MAIL_FROM=info@skytechghana.com`. Do not use the normal mailbox password. Ensure SPF/DKIM are enabled for `skytechghana.com`. Set `MAIL_HEALTH_ENABLED=true` only after the credentials work, then send a real OTP and invoice email. Gmail is acceptable for transactional messages but not heavy email broadcasts; connect a dedicated transactional/bulk-email provider before sending those.
 
-5. **Configure Twilio SMS.** Create or select the Twilio production account, obtain an SMS-capable sender number, complete any country-specific sender registration, and set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER`. Send test OTP and broadcast messages to opted-in test numbers. Confirm consent, opt-out, and local messaging-law requirements before bulk sending.
+5. **Configure Arkesel SMS.** In Arkesel, create an API key and register/approve a sender ID. The API permits no more than 11 sender-ID characters, so `Skytech Ghana` is invalid; use the exact shorter value approved by Arkesel, such as `Skytech` or `SkytechGH`. In Railway set `COMMUNICATION_SMS_PROVIDER=arkesel`, `ARKESEL_SMS_API_URL=https://sms.arkesel.com/api/v2/sms/send`, `ARKESEL_SMS_API_KEY` to the secret API key, `ARKESEL_SMS_SENDER_ID` to that approved value, `ARKESEL_SMS_SANDBOX=true`, and `ARKESEL_DEFAULT_COUNTRY_CODE=233`. Test OTP and opted-in broadcast delivery, then change `ARKESEL_SMS_SANDBOX=false` for production. Confirm consent, opt-out, credits, and Ghana messaging requirements before bulk sending. These values never belong in Vercel or frontend code.
 
 6. **Keep Stripe inactive until billing is implemented.** The SDK client is wired, but no billing workflow calls it. Leave `STRIPE_SECRET_KEY` empty or provide a restricted test key. Do not use a live Stripe key until webhook verification, subscription persistence, retry handling, and real feature-gate rules replace the intentional stub.
 
