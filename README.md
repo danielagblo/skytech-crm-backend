@@ -14,13 +14,13 @@ The Maven Wrapper is committed, so a separate Maven installation is not required
 ## Supabase setup
 
 1. In Supabase, create or open a project.
-2. Open **Project Settings -> Database** and copy a JDBC-compatible connection string. For a direct connection it normally resembles:
+2. This project is configured to use its Supabase shared pooler in session mode. The selected JDBC endpoint is:
 
    ```text
-   jdbc:postgresql://db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require
+   jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require
    ```
 
-   For the Supabase pooler, use the host, port, database, and username shown in its connection panel and retain `?sslmode=require`.
+   The corresponding database username is `postgres.wpqhskjkueajfwzulbih`. Port `5432` selects session mode, which is compatible with this persistent Spring Boot/HikariCP application on Railway and Render.
 3. Copy `.env.example` to `.env` and enter the database URL, username, and password. Spring does not load `.env` by itself; export these variables in your shell or configure them in your IDE/runtime.
 4. Use a `JWT_SECRET` containing at least 32 random bytes. Do not commit it.
 
@@ -33,6 +33,9 @@ Flyway runs automatically on startup and owns the schema. The configured Hiberna
 | `DATABASE_URL` | yes | PostgreSQL JDBC URL |
 | `DATABASE_USERNAME` | yes | PostgreSQL/Supabase username |
 | `DATABASE_PASSWORD` | yes | Database password |
+| `DB_POOL_MAX_SIZE` | no | Maximum Hikari connections per app instance; defaults to `5` |
+| `DB_POOL_MIN_IDLE` | no | Minimum idle Hikari connections; defaults to `1` |
+| `DB_CONNECTION_TIMEOUT_MS` | no | Database connection timeout; defaults to `30000` ms |
 | `JWT_SECRET` | yes | HMAC key, minimum 32 random bytes |
 | `CORS_ALLOWED_ORIGINS` | no | Comma-separated frontend origins; defaults to `http://localhost:3000` |
 | `TWILIO_ACCOUNT_SID` | for SMS | Twilio account SID |
@@ -52,8 +55,8 @@ The Stripe SDK client is wired from `STRIPE_SECRET_KEY`, but no billing operatio
 PowerShell example:
 
 ```powershell
-$env:DATABASE_URL='jdbc:postgresql://db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require'
-$env:DATABASE_USERNAME='postgres'
+$env:DATABASE_URL='jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require'
+$env:DATABASE_USERNAME='postgres.wpqhskjkueajfwzulbih'
 $env:DATABASE_PASSWORD='your-password'
 $env:JWT_SECRET='replace-with-at-least-32-random-bytes'
 .\mvnw.cmd spring-boot:run
@@ -99,13 +102,13 @@ docker run --rm -p 8080:8080 --env-file .env skytech-crm-backend
 
 Complete every item below before exposing the API to real users.
 
-1. **Create the Supabase PostgreSQL project.** In Supabase, create the production project, choose the production region, and save the database password in a password manager. In **Project Settings -> Database**, copy either the direct PostgreSQL host or the session-pooler connection details. Build a JDBC URL such as:
+1. **Configure the Supabase PostgreSQL project.** Save the database password in a password manager. This deployment uses the shared session pooler:
 
    ```text
-   jdbc:postgresql://db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require
+   jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require
    ```
 
-   Use the exact pooler username and port shown by Supabase if using its session pooler. Do not use the Supabase anon key: this backend connects through PostgreSQL JDBC.
+   Use `postgres.wpqhskjkueajfwzulbih` as the username. Do not use the Supabase anon key: this backend connects through PostgreSQL JDBC.
 
 2. **Create production secrets.** Generate a JWT secret with at least 32 cryptographically random bytes. PowerShell example:
 
