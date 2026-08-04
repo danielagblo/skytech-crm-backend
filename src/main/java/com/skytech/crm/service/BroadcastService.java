@@ -205,22 +205,11 @@ public class BroadcastService {
         || filter.isEmpty()
         || Boolean.TRUE.equals(filter.get("all"))
         || "ALL".equals(filter.get("stage"))) return candidates;
-    Object stage = filter.get("stage");
-    if (stage != null) {
-      DealStage dealStage;
-      try {
-        dealStage = DealStage.valueOf(String.valueOf(stage));
-      } catch (IllegalArgumentException e) {
-        throw new IllegalArgumentException("Invalid broadcast deal stage: " + stage);
-      }
-      Set<UUID> ids =
-          deals.findByStage(dealStage).stream()
-              .map(Deal::getLead)
-              .filter(Objects::nonNull)
-              .map(Lead::getId)
-              .collect(java.util.stream.Collectors.toSet());
-      candidates.removeIf(lead -> !ids.contains(lead.getId()));
-    }
+    Set<UUID> targeted = new LinkedHashSet<>();
+    addLeadIds(targeted, filter.get("leadIds"));
+    addStageLeadIds(targeted, filter.get("stages"));
+    addStageLeadIds(targeted, filter.get("stage"));
+    if (!targeted.isEmpty()) candidates.removeIf(lead -> !targeted.contains(lead.getId()));
     Object status = filter.get("lead_status");
     if (status != null) {
       LeadStatus value;
@@ -248,5 +237,38 @@ public class BroadcastService {
       candidates.removeIf(
           lead -> !Objects.equals(lead.getCategory(), String.valueOf(filter.get("category"))));
     return candidates.stream().distinct().toList();
+  }
+
+  private void addLeadIds(Set<UUID> target, Object value) {
+    for (Object item : valuesOf(value)) {
+      try {
+        target.add(UUID.fromString(String.valueOf(item)));
+      } catch (IllegalArgumentException exception) {
+        throw new IllegalArgumentException("Invalid broadcast lead id: " + item);
+      }
+    }
+  }
+
+  private void addStageLeadIds(Set<UUID> target, Object value) {
+    for (Object item : valuesOf(value)) {
+      DealStage dealStage;
+      try {
+        dealStage = DealStage.valueOf(String.valueOf(item));
+      } catch (IllegalArgumentException exception) {
+        throw new IllegalArgumentException("Invalid broadcast deal stage: " + item);
+      }
+      deals.findByStage(dealStage).stream()
+          .map(Deal::getLead)
+          .filter(Objects::nonNull)
+          .map(Lead::getId)
+          .forEach(target::add);
+    }
+  }
+
+  private List<?> valuesOf(Object value) {
+    if (value == null) return List.of();
+    if (value instanceof Collection<?> collection) return new ArrayList<>(collection);
+    if (value.getClass().isArray()) return Arrays.asList((Object[]) value);
+    return List.of(value);
   }
 }

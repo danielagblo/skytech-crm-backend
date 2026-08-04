@@ -15,8 +15,8 @@ public class DashboardController extends BaseController {
   private final DashboardService dashboard;
 
   @GetMapping("/overview")
-  ApiResponse<?> overview() {
-    return ok(dashboard.overview());
+  ApiResponse<?> overview(@RequestParam(defaultValue = "today") String period) {
+    return ok(dashboard.overview(period));
   }
 
   @GetMapping("/top-deals")

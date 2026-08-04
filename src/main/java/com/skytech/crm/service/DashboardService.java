@@ -6,6 +6,7 @@ import com.skytech.crm.enums.*;
 import com.skytech.crm.exception.*;
 import com.skytech.crm.repository.*;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
@@ -24,13 +25,18 @@ public class DashboardService {
   private final FeatureGateService gates;
 
   @Transactional(readOnly = true)
-  public DashboardOverviewResponse overview() {
+    public DashboardOverviewResponse overview(String period) {
     User me = current.get();
-    List<Deal> visibleDeals = visibleDeals(me);
+        OffsetDateTime start = periodStart(period);
+        List<Deal> visibleDeals = visibleDeals(me).stream().filter(deal -> dealRecent(deal, start)).toList();
     Set<UUID> visibleDealIds =
         visibleDeals.stream().map(Deal::getId).collect(java.util.stream.Collectors.toSet());
     List<DealLog> visibleLogs =
-        visibleDealIds.isEmpty() ? List.of() : logs.findByDealIdIn(visibleDealIds);
+                visibleDealIds.isEmpty()
+                        ? List.of()
+                        : logs.findByDealIdIn(visibleDealIds).stream()
+                                .filter(log -> logRecent(log, start))
+                                .toList();
 
     List<User> visibleUsers = me.getRole() == Role.AGENT ? List.of(me) : users.findAll();
     List<DashboardOverviewResponse.AgentRevenue> revenue =
@@ -161,6 +167,31 @@ public class DashboardService {
     return new DashboardOverviewResponse(
         outgoing, incoming, revenue, performance, reminders, payments, rank);
   }
+
+    private OffsetDateTime periodStart(String period) {
+        OffsetDateTime now = OffsetDateTime.now();
+        return switch (period == null ? "today" : period) {
+            case "today" -> LocalDateTime.of(now.toLocalDate(), java.time.LocalTime.MIDNIGHT).atOffset(now.getOffset());
+            case "this_week" ->
+                    LocalDateTime.of(
+                                    now.toLocalDate().minusDays(Math.max(now.getDayOfWeek().getValue() - 1, 0)),
+                                    java.time.LocalTime.MIDNIGHT)
+                            .atOffset(now.getOffset());
+            case "this_month" ->
+                    LocalDateTime.of(now.toLocalDate().withDayOfMonth(1), java.time.LocalTime.MIDNIGHT)
+                            .atOffset(now.getOffset());
+            case "three_months" -> now.minusMonths(3);
+            default -> throw new IllegalArgumentException("period must be today, this_week, this_month, or three_months");
+        };
+    }
+
+    private boolean dealRecent(Deal deal, OffsetDateTime start) {
+        return deal.getCreatedAt() == null || !deal.getCreatedAt().isBefore(start);
+    }
+
+    private boolean logRecent(DealLog log, OffsetDateTime start) {
+        return log.getCreatedAt() == null || !log.getCreatedAt().isBefore(start);
+    }
 
   @Transactional(readOnly = true)
   public Page<TopDealResponse> topDeals(String period, Pageable pageable) {

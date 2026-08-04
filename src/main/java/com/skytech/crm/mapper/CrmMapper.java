@@ -51,9 +51,17 @@ public interface CrmMapper {
 
   InvoiceResponse.Item invoiceItem(InvoiceItem value);
 
+  default List<InvoiceResponse.Item> invoiceItems(List<InvoiceItem> values) {
+    return values == null ? List.of() : values.stream().map(this::invoiceItem).toList();
+  }
+
   @Mapping(target = "dealLogId", source = "dealLog.id")
   @Mapping(target = "recordedById", source = "recordedBy.id")
   InvoiceResponse.Payment invoicePayment(InvoicePayment value);
+
+  default List<InvoiceResponse.Payment> invoicePayments(List<InvoicePayment> values) {
+    return values == null ? List.of() : values.stream().map(this::invoicePayment).toList();
+  }
 
   @Mapping(target = "taskId", source = "task.id")
   @Mapping(target = "complete", source = "complete")

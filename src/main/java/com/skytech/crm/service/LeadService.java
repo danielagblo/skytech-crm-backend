@@ -54,7 +54,10 @@ public class LeadService {
           if (priority != null) x.add(b.equal(r.get("priority"), priority));
           if (status != null) x.add(b.equal(r.get("status"), status));
           if (source != null) x.add(b.equal(r.get("leadSource"), source));
-          if (category != null) x.add(b.equal(r.get("category"), category));
+          if (category != null)
+            x.add(
+                b.or(
+                    b.equal(r.get("category"), category), b.equal(r.get("industry"), category)));
           UUID target = me.getRole() == Role.AGENT ? me.getId() : assignee;
           if (target != null)
             x.add(
@@ -258,7 +261,7 @@ public class LeadService {
     l.setRole(r.getRole());
     l.setAddress(r.getAddress());
     l.setIndustry(r.getIndustry());
-    l.setCategory(r.getCategory());
+    l.setCategory(r.getCategory() != null ? r.getCategory() : r.getIndustry());
     l.setLeadSource(r.getLeadSource());
     l.setPriority(r.getPriority());
     if (r.getStatus() != null) l.setStatus(r.getStatus());
