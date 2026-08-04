@@ -63,6 +63,28 @@ public class AutomationScheduler {
     }
   }
 
+  @Scheduled(cron = "0 0 7 * * *", zone = "${app.time-zone:Africa/Accra}")
+  @Transactional
+  public void personalAutomations() {
+    String today = today().toString();
+    for (Automation a :
+        automations.findByAutomationTypeAndIsActiveTrue(AutomationType.PERSONAL)) {
+      Map<String, Object> triggerConfig = a.getTriggerConfig() == null ? Map.of() : a.getTriggerConfig();
+      Object date = triggerConfig.get("date");
+      if (!today.equals(String.valueOf(date))) continue;
+      Object contactIdsValue = triggerConfig.get("contactIds");
+      if (!(contactIdsValue instanceof Collection<?> contactIds) || contactIds.isEmpty()) continue;
+      for (Object contactId : contactIds) {
+        try {
+          UUID leadId = UUID.fromString(String.valueOf(contactId));
+          leads.findById(leadId).ifPresent(lead -> execution.execute(a, lead, a.getName()));
+        } catch (IllegalArgumentException exception) {
+          log.warn("Skipping personal automation {} because contact id {} is invalid", a.getId(), contactId);
+        }
+      }
+    }
+  }
+
   @Scheduled(cron = "0 0 * * * *", zone = "${app.time-zone:Africa/Accra}")
   @Transactional
   public void retention() {

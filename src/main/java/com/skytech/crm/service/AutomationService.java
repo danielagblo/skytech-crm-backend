@@ -42,8 +42,8 @@ public class AutomationService {
                 AutomationType.PUBLIC_HOLIDAY, true, "DATE", List.of("date")),
             new AutomationOptionsResponse.TypeOption(
                 AutomationType.PAYMENT, true, "DEAL_PAYMENT_RECORDED", List.of()),
-            new AutomationOptionsResponse.TypeOption(
-                AutomationType.PERSONAL, false, "NOT_CONFIGURED", List.of())),
+        new AutomationOptionsResponse.TypeOption(
+          AutomationType.PERSONAL, true, "DATE", List.of("date", "contactIds"))),
         List.of("SMS", "EMAIL", "BOTH"),
         List.of("channel", "subject", "message"));
   }
@@ -120,17 +120,30 @@ public class AutomationService {
   }
 
   private void validate(AutomationRequest request) {
-    if (request.getAutomationType() == AutomationType.PUBLIC_HOLIDAY) {
+    if (request.getAutomationType() == AutomationType.PUBLIC_HOLIDAY
+        || request.getAutomationType() == AutomationType.PERSONAL) {
       Object date =
           request.getTriggerConfig() == null ? null : request.getTriggerConfig().get("date");
       if (date == null || String.valueOf(date).isBlank())
         throw new IllegalArgumentException(
-            "Public holiday automations require triggerConfig.date in YYYY-MM-DD format");
+            request.getAutomationType() == AutomationType.PERSONAL
+                ? "Personal automations require triggerConfig.date in YYYY-MM-DD format"
+                : "Public holiday automations require triggerConfig.date in YYYY-MM-DD format");
       try {
         java.time.LocalDate.parse(String.valueOf(date));
       } catch (java.time.format.DateTimeParseException exception) {
         throw new IllegalArgumentException(
-            "Public holiday triggerConfig.date must use YYYY-MM-DD format");
+            request.getAutomationType() == AutomationType.PERSONAL
+                ? "Personal triggerConfig.date must use YYYY-MM-DD format"
+                : "Public holiday triggerConfig.date must use YYYY-MM-DD format");
+      }
+    }
+    if (request.getAutomationType() == AutomationType.PERSONAL) {
+      Object contactIds =
+          request.getTriggerConfig() == null ? null : request.getTriggerConfig().get("contactIds");
+      if (!(contactIds instanceof Collection<?> collection) || collection.isEmpty()) {
+        throw new IllegalArgumentException(
+            "Personal automations require at least one triggerConfig.contactIds entry");
       }
     }
     if (request.getSteps() == null) return;
