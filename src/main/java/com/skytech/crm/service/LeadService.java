@@ -228,12 +228,30 @@ public class LeadService {
     return settings.findAll().stream().findFirst().map(Setting::isAutoAssignEnabled).orElse(false);
   }
 
+  // this version assigns to agents currently online ONLY, 
+  // but we don't have a way to track online agents yet, 
+  // so we will use the least loaded agent for now
+  //
+  // private UUID leastLoadedActiveAgent() {
+  //   return users.findAll().stream()
+  //       .filter(user -> user.getRole() == Role.AGENT && user.isActive())
+  //       .min(
+  //           Comparator.<User>comparingInt(user -> leads.findAssigned(user.getId()).size())
+  //               .thenComparing(User::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+  //       .map(User::getId)
+  //       .orElseThrow(() -> new IllegalArgumentException("No active agents available"));
+  // }
+
   private UUID leastLoadedActiveAgent() {
     return users.findAll().stream()
         .filter(user -> user.getRole() == Role.AGENT && user.isActive())
         .min(
             Comparator.<User>comparingInt(user -> leads.findAssigned(user.getId()).size())
-                .thenComparing(User::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .thenComparing(
+                    User::getCreatedAt,
+                    Comparator.nullsLast(Comparator.naturalOrder())
+                )
+        )
         .map(User::getId)
         .orElseThrow(() -> new IllegalArgumentException("No active agents available"));
   }

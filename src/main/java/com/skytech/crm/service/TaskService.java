@@ -25,9 +25,13 @@ public class TaskService {
   private final UserRepository users;
   private final LeadRepository leads;
   private final DealRepository deals;
+  private final CalendarEventRepository calendarEvents;
   private final CurrentUserService current;
   private final ActivityService activity;
   private final CrmMapper mapper;
+  private static final String TASK_EVENT_TYPE = "TASK_DUE";
+  private static final String TASK_EVENT_MARKER_PREFIX = "\n[TASK_ID=";
+  private static final String TASK_EVENT_MARKER_SUFFIX = "]";
 
   @Transactional(readOnly = true)
   public Page<TaskResponse> list(
@@ -64,6 +68,7 @@ public class TaskService {
     apply(t, r);
     if (actor.getRole() == Role.AGENT) t.setAssignees(new HashSet<>(Set.of(actor)));
     t = tasks.save(t);
+    syncTaskCalendarEvent(t);
     activity.log(current.id(), ActivityType.TASK_STATUS_CHANGED, "TASK", t.getId(), "Created task");
     return mapper.task(t);
   }
@@ -82,13 +87,16 @@ public class TaskService {
     apply(t, r);
     if (current.get().getRole() == Role.AGENT) t.setAssignees(originalAssignees);
     t = tasks.save(t);
+    syncTaskCalendarEvent(t);
     activity.log(current.id(), ActivityType.TASK_STATUS_CHANGED, "TASK", id, "Updated task");
     return mapper.task(t);
   }
 
   @Transactional
   public void delete(UUID id) {
-    tasks.delete(find(id));
+    Task task = find(id);
+    deleteTaskCalendarEvent(task.getId());
+    tasks.delete(task);
     activity.log(current.id(), ActivityType.TASK_STATUS_CHANGED, "TASK", id, "Deleted task");
   }
 
@@ -268,5 +276,42 @@ public class TaskService {
     s.setDescription(r.getDescription());
     s.setPriority(r.getPriority());
     if (r.getComplete() != null) s.setComplete(r.getComplete());
+  }
+
+  private void syncTaskCalendarEvent(Task task) {
+    deleteTaskCalendarEvent(task.getId());
+    if (task.getDueDate() == null) return;
+    CalendarEvent event = new CalendarEvent();
+    event.setOwner(task.getCreatedBy());
+    event.setTitle(task.getTitle());
+    event.setDescription(taskDescription(task));
+    event.setStartTime(task.getDueDate());
+    event.setEndTime(task.getDueDate().plusMinutes(30));
+    event.setEventType(TASK_EVENT_TYPE);
+    event.setLinkedLead(task.getLinkedLead());
+    event.setLinkedDeal(task.getLinkedDeal());
+    event.setAssignees(
+        task.getAssignees().stream().map(User::getId).toArray(UUID[]::new));
+    calendarEvents.save(event);
+  }
+
+  private void deleteTaskCalendarEvent(UUID taskId) {
+    calendarEvents
+        .findAll()
+        .stream()
+        .filter(event -> TASK_EVENT_TYPE.equals(event.getEventType()))
+        .filter(event -> taskDescriptionMatches(event.getDescription(), taskId))
+        .forEach(calendarEvents::delete);
+  }
+
+  private boolean taskDescriptionMatches(String description, UUID taskId) {
+    if (description == null || taskId == null) return false;
+    String marker = TASK_EVENT_MARKER_PREFIX + taskId + TASK_EVENT_MARKER_SUFFIX;
+    return description.endsWith(marker);
+  }
+
+  private String taskDescription(Task task) {
+    String base = task.getDescription() == null ? "" : task.getDescription();
+    return base + TASK_EVENT_MARKER_PREFIX + task.getId() + TASK_EVENT_MARKER_SUFFIX;
   }
 }

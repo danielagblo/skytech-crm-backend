@@ -31,7 +31,7 @@ public class UserService {
   private final FeatureGateService gates;
   private final ActivityService activity;
 
-  @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+  @PreAuthorize("isAuthenticated()")
   @Transactional(readOnly = true)
   public Page<UserResponse> list(String search, Pageable p) {
     Specification<User> s =
