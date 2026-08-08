@@ -28,7 +28,9 @@ public record DashboardOverviewResponse(
       long closedDeals,
       BigDecimal revenue,
       double conversionRate,
-      double rating) {}
+      double rating,
+      int rank,
+      double score) {}
 
   public record FollowUpReminder(
       UUID dealId, String dealTitle, OffsetDateTime followUpAt, String type) {}

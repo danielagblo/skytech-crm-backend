@@ -21,6 +21,7 @@ public class DashboardService {
   private final DealLogRepository logs;
   private final TaskRepository tasks;
   private final UserRepository users;
+  private final RatingRepository ratings;
   private final CurrentUserService current;
   private final FeatureGateService gates;
 
@@ -51,43 +52,12 @@ public class DashboardService {
             .limit(10)
             .toList();
 
+    List<DashboardOverviewResponse.ExecutivePerformance> board = rankingBoard(agents());
     List<DashboardOverviewResponse.ExecutivePerformance> performance =
-        visibleUsers.stream()
-            .filter(user -> user.isActive() && user.getRole() == Role.AGENT)
-            .map(
-                user -> {
-                  List<Deal> assigned = deals.findByAssignedToId(user.getId());
-                  long closed =
-                      assigned.stream()
-                          .filter(d -> d.getStage() == DealStage.CLIENT_RETENTION)
-                          .count();
-                  double conversion =
-                      assigned.isEmpty()
-                          ? 0
-                          : Math.round(closed * 10000.0 / assigned.size()) / 100.0;
-                  Set<UUID> ids =
-                      assigned.stream()
-                          .map(Deal::getId)
-                          .collect(java.util.stream.Collectors.toSet());
-                  double rating =
-                      ids.isEmpty()
-                          ? 0
-                          : logs.findByDealIdIn(ids).stream()
-                              .filter(log -> log.getAutoReviewScore() != null)
-                              .mapToInt(DealLog::getAutoReviewScore)
-                              .average()
-                              .orElse(0);
-                  return new DashboardOverviewResponse.ExecutivePerformance(
-                      user.getId(),
-                      user.fullName(),
-                      closed,
-                      revenue(user.getId()),
-                      conversion,
-                      Math.round(rating * 100.0) / 100.0);
-                })
-            .sorted(
-                Comparator.comparing(DashboardOverviewResponse.ExecutivePerformance::revenue)
-                    .reversed())
+        board.stream()
+            .filter(
+                p ->
+                    visibleUsers.stream().anyMatch(v -> v.getId().equals(p.userId())))
             .toList();
 
     OffsetDateTime now = OffsetDateTime.now();
@@ -158,8 +128,8 @@ public class DashboardService {
                 .doubleValue();
     DashboardOverviewResponse.AgentRank rank =
         new DashboardOverviewResponse.AgentRank(
-            rankFor(me),
-            users.findAll().stream().filter(u -> u.getRole() == Role.AGENT).count(),
+            rankIn(board, me),
+            board.size(),
             screenTimeHours,
             targetAchievement,
             ownRevenue);
@@ -296,15 +266,157 @@ public class DashboardService {
     return Optional.ofNullable(deal.getTotalPaid()).orElse(BigDecimal.ZERO);
   }
 
-  private int rankFor(User user) {
+  private int rankIn(List<DashboardOverviewResponse.ExecutivePerformance> board, User user) {
     if (user.getRole() != Role.AGENT) return 1;
-    List<UUID> ranked =
-        users.findAll().stream()
-            .filter(candidate -> candidate.getRole() == Role.AGENT && candidate.isActive())
-            .sorted(Comparator.comparing((User candidate) -> revenue(candidate.getId())).reversed())
-            .map(User::getId)
-            .toList();
-    int index = ranked.indexOf(user.getId());
-    return index < 0 ? ranked.size() + 1 : index + 1;
+    for (DashboardOverviewResponse.ExecutivePerformance p : board)
+      if (p.userId().equals(user.getId())) return p.rank();
+    return board.isEmpty() ? 1 : board.size() + 1;
   }
+
+  private List<User> agents() {
+    return users.findAll().stream()
+        .filter(user -> user.isActive() && user.getRole() == Role.AGENT)
+        .toList();
+  }
+
+  private record AgentMetric(
+      UUID userId,
+      String name,
+      long deals,
+      long closed,
+      BigDecimal revenue,
+      double ratingSum,
+      long ratingCount,
+      double perfSum,
+      long perfCount) {}
+
+  private List<DashboardOverviewResponse.ExecutivePerformance> rankingBoard(List<User> agentUsers) {
+    if (agentUsers.isEmpty()) return List.of();
+
+    List<AgentMetric> metrics = new ArrayList<>();
+    long teamDeals = 0, teamClosed = 0;
+    for (User u : agentUsers) {
+      List<Deal> assigned = deals.findByAssignedToId(u.getId());
+      long closed =
+          assigned.stream().filter(d -> d.getStage() == DealStage.CLIENT_RETENTION).count();
+      teamDeals += assigned.size();
+      teamClosed += closed;
+
+      double ratingSum = 0;
+      long ratingCount = 0;
+      for (Rating r : ratings.findByAgentIdOrderByCreatedAtDesc(u.getId()))
+        if (Boolean.TRUE.equals(r.getRated()) && r.getRating() != null) {
+          ratingSum += r.getRating();
+          ratingCount++;
+        }
+
+      Set<UUID> ids = assigned.stream().map(Deal::getId).collect(java.util.stream.Collectors.toSet());
+      double perfSum = 0;
+      long perfCount = 0;
+      if (!ids.isEmpty())
+        for (DealLog l : logs.findByDealIdIn(ids))
+          if (l.getAutoReviewScore() != null) {
+            perfSum += l.getAutoReviewScore();
+            perfCount++;
+          }
+
+      metrics.add(
+          new AgentMetric(
+              u.getId(),
+              u.fullName(),
+              assigned.size(),
+              closed,
+              revenue(u.getId()),
+              ratingSum,
+              ratingCount,
+              perfSum,
+              perfCount));
+    }
+
+    double teamConversion = teamDeals == 0 ? 0 : (double) teamClosed / teamDeals;
+    long totalRatingCount = metrics.stream().mapToLong(AgentMetric::ratingCount).sum();
+    double globalRating =
+        totalRatingCount == 0
+            ? 4.0
+            : metrics.stream().mapToDouble(AgentMetric::ratingSum).sum() / totalRatingCount;
+    long totalPerfCount = metrics.stream().mapToLong(AgentMetric::perfCount).sum();
+    double globalPerf =
+        totalPerfCount == 0
+            ? 3.0
+            : metrics.stream().mapToDouble(AgentMetric::perfSum).sum() / totalPerfCount;
+
+    double maxRevenueLog =
+        metrics.stream()
+            .map(AgentMetric::revenue)
+            .mapToDouble(r -> Math.log1p(Math.max(0, r.doubleValue())))
+            .max()
+            .orElse(0);
+    double maxClosedLog =
+        metrics.stream().mapToLong(AgentMetric::closed).mapToDouble(Math::log1p).max().orElse(0);
+
+    List<DashboardOverviewResponse.ExecutivePerformance> board = new ArrayList<>();
+    for (AgentMetric m : metrics) {
+      // Bayesian shrinkage : pull small samples toward the team baselines so a 1/1
+      // 100% conversion or a single 5.0 review cannot dominate the ranking.
+      double ratingBayes =
+          (m.ratingSum() + RATING_PRIOR * globalRating) / (m.ratingCount() + RATING_PRIOR);
+      double perfBayes =
+          (m.perfSum() + RATING_PRIOR * globalPerf) / (m.perfCount() + RATING_PRIOR);
+      double convBayes =
+          (m.closed() + CONV_PRIOR * teamConversion) / (m.deals() + CONV_PRIOR);
+
+      double revNorm =
+          maxRevenueLog <= 0
+              ? 0
+              : Math.log1p(Math.max(0, m.revenue().doubleValue())) / maxRevenueLog;
+      double closedNorm = maxClosedLog <= 0 ? 0 : Math.log1p(m.closed()) / maxClosedLog;
+
+      double composite =
+          100
+              * (WEIGHT_RATING * (ratingBayes / 5.0)
+                  + WEIGHT_REVENUE * revNorm
+                  + WEIGHT_PERF * (perfBayes / 5.0)
+                  + WEIGHT_CLOSED * closedNorm
+                  + WEIGHT_CONVERSION * convBayes);
+
+      double rawRating = m.ratingCount() == 0 ? 0 : m.ratingSum() / m.ratingCount();
+      double rawConversion = m.deals() == 0 ? 0 : m.closed() * 100.0 / m.deals();
+      board.add(
+          new DashboardOverviewResponse.ExecutivePerformance(
+              m.userId(),
+              m.name(),
+              m.closed(),
+              m.revenue(),
+              Math.round(rawConversion * 100.0) / 100.0,
+              Math.round(rawRating * 100.0) / 100.0,
+              0,
+              Math.round(composite * 100.0) / 100.0));
+    }
+
+    board.sort(
+        Comparator.comparing(DashboardOverviewResponse.ExecutivePerformance::score).reversed());
+    for (int i = 0; i < board.size(); i++) {
+      DashboardOverviewResponse.ExecutivePerformance p = board.get(i);
+      board.set(
+          i,
+          new DashboardOverviewResponse.ExecutivePerformance(
+              p.userId(),
+              p.name(),
+              p.closedDeals(),
+              p.revenue(),
+              p.conversionRate(),
+              p.rating(),
+              i + 1,
+              p.score()));
+    }
+    return board;
+  }
+
+  private static final int RATING_PRIOR = 3;
+  private static final int CONV_PRIOR = 5;
+  private static final double WEIGHT_RATING = 0.25;
+  private static final double WEIGHT_REVENUE = 0.25;
+  private static final double WEIGHT_PERF = 0.20;
+  private static final double WEIGHT_CLOSED = 0.15;
+  private static final double WEIGHT_CONVERSION = 0.15;
 }

@@ -10,11 +10,13 @@ import com.skytech.crm.repository.*;
 import java.time.*;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RatingService {
@@ -56,9 +58,12 @@ public class RatingService {
     rating.setRated(false);
     rating = ratings.save(rating);
 
-    if (rating.getClientEmail() == null || rating.getClientEmail().isBlank()) {
-      return link(rating, "NO_EMAIL", "No client email on record to send a rating link");
-    }
+    String page =
+        baseUrl.replaceAll("/+$", "") + "/rate-me/" + rating.getToken();
+    log.info("========== CLIENT RATING LINK ==========");
+    log.info("Deal: '{}' | Client email: {}", deal.getTitle(), rating.getClientEmail());
+    log.info("Rate here: {}", page);
+    log.info("========================================");
 
     activity.log(
         current.id(), ActivityType.LEAD_LOG_CALL, "DEAL", deal.getId(), "Requested client rating");
@@ -68,7 +73,12 @@ public class RatingService {
             rating.getClientEmail(),
             agent.fullName(),
             deal.getTitle(),
-            baseUrl.replaceAll("/+$", "") + "/rate-me/" + rating.getToken()));
+            page));
+    if (rating.getClientEmail() == null || rating.getClientEmail().isBlank())
+      return link(
+          rating,
+          "NO_EMAIL",
+          "The client has no email; a rating link will go out by SMS if a phone is on record");
     return link(rating, "SENT", "Rating link sent to " + rating.getClientEmail());
   }
 
@@ -129,7 +139,8 @@ public class RatingService {
         rating.getDeal().getId(),
         rating.getClientEmail(),
         status,
-        message);
+        message,
+        baseUrl.replaceAll("/+$", "") + "/rate-me/" + rating.getToken());
   }
 
   private Deal deal(UUID id) {
