@@ -49,5 +49,8 @@ public class Task extends BaseEntity {
       inverseJoinColumns = @JoinColumn(name = "user_id"))
   private Set<User> assignees = new HashSet<>();
 
+  @Column(columnDefinition = "text")
+  private String completionReason;
+
   @Version private Long version;
 }

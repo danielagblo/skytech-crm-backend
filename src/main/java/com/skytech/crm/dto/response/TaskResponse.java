@@ -17,6 +17,7 @@ public record TaskResponse(
     UUID linkedDealId,
     OffsetDateTime dueDate,
     Set<UUID> assigneeIds,
+    String completionReason,
     Long version,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt) {}

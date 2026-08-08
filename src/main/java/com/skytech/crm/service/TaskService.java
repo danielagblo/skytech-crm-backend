@@ -101,9 +101,12 @@ public class TaskService {
   }
 
   @Transactional
-  public TaskResponse status(UUID id, TaskStatus status) {
+  public TaskResponse status(UUID id, TaskStatus status, String reason) {
     Task t = find(id);
     t.setStatus(status);
+    if (reason != null && !reason.isBlank()) t.setCompletionReason(reason.trim());
+    if (status == TaskStatus.DONE && t.getCompletionReason() == null)
+      t.setCompletionReason("Completed");
     tasks.save(t);
     activity.log(
         current.id(),

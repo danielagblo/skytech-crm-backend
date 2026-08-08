@@ -56,7 +56,7 @@ public class TaskController extends BaseController {
 
   @PutMapping("/{id}/status")
   ApiResponse<?> status(@PathVariable UUID id, @Valid @RequestBody TaskStatusUpdateRequest r) {
-    return ok(tasks.status(id, r.status()));
+    return ok(tasks.status(id, r.status(), r.reason()));
   }
 
   @GetMapping("/{taskId}/subtasks")
