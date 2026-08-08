@@ -11,6 +11,8 @@ public interface DealLogRepository extends JpaRepository<DealLog, UUID> {
 
   List<DealLog> findByDealIdIn(Collection<UUID> dealIds);
 
+  Optional<DealLog> findFirstByDealIdOrderByCreatedAtDesc(UUID dealId);
+
   @Query(
       "select l from DealLog l where l.followUpAt between :from and :to or l.settlementFollowUp"
           + " between :from and :to")
