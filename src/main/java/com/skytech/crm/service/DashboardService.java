@@ -29,15 +29,18 @@ public class DashboardService {
     public DashboardOverviewResponse overview(String period) {
     User me = current.get();
         OffsetDateTime start = periodStart(period);
-        List<Deal> visibleDeals = visibleDeals(me).stream().filter(deal -> dealRecent(deal, start)).toList();
-    Set<UUID> visibleDealIds =
-        visibleDeals.stream().map(Deal::getId).collect(java.util.stream.Collectors.toSet());
+        Set<UUID> visibleDealIds =
+            visibleDeals(me).stream()
+                .map(Deal::getId)
+                .collect(java.util.stream.Collectors.toSet());
     List<DealLog> visibleLogs =
                 visibleDealIds.isEmpty()
                         ? List.of()
                         : logs.findByDealIdIn(visibleDealIds).stream()
                                 .filter(log -> logRecent(log, start))
                                 .toList();
+    List<Deal> visibleDeals =
+        visibleDeals(me).stream().filter(deal -> dealRecent(deal, start)).toList();
 
     List<User> visibleUsers = me.getRole() == Role.AGENT ? List.of(me) : users.findAll();
     List<DashboardOverviewResponse.AgentRevenue> revenue =

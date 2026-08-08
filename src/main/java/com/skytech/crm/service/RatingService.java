@@ -37,14 +37,6 @@ public class RatingService {
     User agent =
         users.findById(current.id()).orElseThrow(() -> new ResourceNotFoundException("User"));
 
-    Optional<Rating> pending =
-        ratings.findFirstByDealIdAndAgentIdAndRatedFalseOrderByCreatedAtDesc(
-            deal.getId(), agent.getId());
-    if (pending.isPresent()) {
-      Rating existing = pending.get();
-      return link(existing, "ALREADY_SENT", "A rating link is already pending for this client");
-    }
-
     Rating rating = new Rating();
     rating.setDeal(deal);
     rating.setAgent(agent);
