@@ -31,6 +31,7 @@ class InvoiceServiceTest {
   @Mock CrmMapper mapper;
   @Mock ApplicationEventPublisher events;
   @Mock InvoiceConfig config;
+  @Mock CalendarSyncService calendar;
   @InjectMocks InvoiceService service;
 
   @Test

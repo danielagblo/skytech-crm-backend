@@ -19,11 +19,12 @@ class AutomationServiceTest {
     FeatureGateService gates = mock(FeatureGateService.class);
     ActivityService activity = mock(ActivityService.class);
     CrmMapper mapper = mock(CrmMapper.class);
+    CalendarSyncService calendar = mock(CalendarSyncService.class);
     User admin = new User();
     admin.setRole(Role.ADMIN);
     when(current.get()).thenReturn(admin);
     AutomationService service =
-        new AutomationService(automations, current, gates, activity, mapper);
+        new AutomationService(automations, current, gates, activity, mapper, calendar);
     CreateAutomationRequest request = new CreateAutomationRequest();
     request.setAutomationType(AutomationType.PUBLIC_HOLIDAY);
     request.setName("Holiday greeting");
