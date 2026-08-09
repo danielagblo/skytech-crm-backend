@@ -28,6 +28,7 @@ public class DealService {
   private final CurrentUserService current;
   private final ActivityService activity;
   private final CrmMapper mapper;
+  private final CalendarSyncService calendar;
 
   @Transactional(readOnly = true)
   public Page<DealResponse> list(
@@ -65,6 +66,7 @@ public class DealService {
     apply(d, r);
     if (me.getRole() == Role.AGENT) d.setAssignedTo(me);
     d = deals.save(d);
+    calendar.syncDealRenewals(d);
     activity.log(me.getId(), ActivityType.LEAD_STAGE_CHANGED, "DEAL", d.getId(), "Created deal");
     return mapper.deal(d);
   }
@@ -91,6 +93,7 @@ public class DealService {
     if (current.get().getRole() == Role.AGENT) d.setAssignedTo(originalAssignee);
     recalculate(d);
     d = deals.save(d);
+    calendar.syncDealRenewals(d);
     activity.log(current.id(), ActivityType.LEAD_STAGE_CHANGED, "DEAL", id, "Updated deal");
     return mapper.deal(d);
   }
@@ -101,6 +104,7 @@ public class DealService {
     Deal d = find(id);
     d.setDeletedAt(OffsetDateTime.now());
     deals.save(d);
+    calendar.syncDealRenewals(d);
     activity.log(current.id(), ActivityType.LEAD_STAGE_CHANGED, "DEAL", id, "Deleted deal");
   }
 

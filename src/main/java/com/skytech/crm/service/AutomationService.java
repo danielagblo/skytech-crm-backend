@@ -24,6 +24,7 @@ public class AutomationService {
   private final FeatureGateService gates;
   private final ActivityService activity;
   private final CrmMapper mapper;
+  private final CalendarSyncService calendar;
 
   @Transactional(readOnly = true)
   public Page<AutomationResponse> list(Pageable p) {
@@ -55,6 +56,7 @@ public class AutomationService {
     a.setCreatedBy(current.get());
     apply(a, r);
     automations.save(a);
+    calendar.syncAutomation(a);
     activity.log(
         current.id(),
         ActivityType.LEAD_STAGE_CHANGED,
@@ -76,6 +78,7 @@ public class AutomationService {
     Automation a = find(id);
     apply(a, r);
     automations.save(a);
+    calendar.syncAutomation(a);
     activity.log(
         current.id(), ActivityType.LEAD_STAGE_CHANGED, "AUTOMATION", id, "Updated automation");
     return mapper.automation(a);
@@ -84,7 +87,9 @@ public class AutomationService {
   @Transactional
   public void delete(UUID id) {
     gates.require(current.get(), Feature.AUTOMATION_BUILDER);
-    automations.delete(find(id));
+    Automation a = find(id);
+    calendar.syncAutomation(a);
+    automations.delete(a);
     activity.log(
         current.id(), ActivityType.LEAD_STAGE_CHANGED, "AUTOMATION", id, "Deleted automation");
   }
@@ -95,6 +100,7 @@ public class AutomationService {
     Automation a = find(id);
     a.setActive(!a.isActive());
     automations.save(a);
+    calendar.syncAutomation(a);
     activity.log(
         current.id(), ActivityType.LEAD_STAGE_CHANGED, "AUTOMATION", id, "Toggled automation");
     return mapper.automation(a);

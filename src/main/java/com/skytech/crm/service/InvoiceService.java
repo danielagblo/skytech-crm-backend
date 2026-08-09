@@ -34,6 +34,7 @@ public class InvoiceService {
   private final CrmMapper mapper;
   private final ApplicationEventPublisher events;
   private final InvoiceConfig config;
+  private final CalendarSyncService calendar;
 
   @Transactional(readOnly = true)
   public Page<InvoiceResponse> list(
@@ -81,6 +82,7 @@ public class InvoiceService {
     invoice.setPaymentInstructions(config.paymentInstructions());
     apply(invoice, request, deal);
     invoice = invoices.save(invoice);
+    calendar.syncInvoice(invoice);
     activity.log(
         actor.getId(),
         ActivityType.LEAD_STAGE_CHANGED,
@@ -104,6 +106,7 @@ public class InvoiceService {
     invoice.setDeal(deal);
     apply(invoice, request, deal);
     invoice = invoices.save(invoice);
+    calendar.syncInvoice(invoice);
     activity.log(
         current.id(), ActivityType.LEAD_STAGE_CHANGED, "DEAL", id, "Updated draft invoice");
     return mapper.invoice(invoice);
@@ -123,6 +126,7 @@ public class InvoiceService {
     invoice.setIssuedAt(OffsetDateTime.now());
     invoice.setStatus(InvoiceStatus.ISSUED);
     invoice = invoices.save(invoice);
+    calendar.syncInvoice(invoice);
     activity.log(
         current.id(),
         ActivityType.LEAD_STAGE_CHANGED,
@@ -218,6 +222,7 @@ public class InvoiceService {
       invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
     }
     invoice = invoices.save(invoice);
+    calendar.syncInvoice(invoice);
     activity.log(
         current.id(),
         ActivityType.LEAD_LOG_CALL,
@@ -238,6 +243,7 @@ public class InvoiceService {
     invoice.setStatus(InvoiceStatus.VOID);
     invoice.setVoidedAt(OffsetDateTime.now());
     invoice = invoices.save(invoice);
+    calendar.syncInvoice(invoice);
     activity.log(
         current.id(),
         ActivityType.LEAD_STAGE_CHANGED,

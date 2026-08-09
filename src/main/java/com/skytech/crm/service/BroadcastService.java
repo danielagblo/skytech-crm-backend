@@ -27,6 +27,7 @@ public class BroadcastService {
   private final NotificationService notifications;
   private final ActivityService activity;
   private final CrmMapper mapper;
+  private final CalendarSyncService calendar;
 
   @Transactional(readOnly = true)
   public Page<BroadcastResponse> list(Pageable p) {
@@ -42,6 +43,7 @@ public class BroadcastService {
     apply(b, r);
     b.setStatus(r.getScheduledAt() == null ? BroadcastStatus.DRAFT : BroadcastStatus.WAITING);
     broadcasts.save(b);
+    calendar.syncBroadcast(b);
     activity.log(
         current.id(),
         ActivityType.LEAD_STAGE_CHANGED,
@@ -66,6 +68,7 @@ public class BroadcastService {
     apply(b, r);
     b.setStatus(r.getScheduledAt() == null ? BroadcastStatus.DRAFT : BroadcastStatus.WAITING);
     broadcasts.save(b);
+    calendar.syncBroadcast(b);
     activity.log(
         current.id(), ActivityType.LEAD_STAGE_CHANGED, "AUTOMATION", id, "Updated broadcast");
     return mapper.broadcast(b);
@@ -77,6 +80,7 @@ public class BroadcastService {
     BroadcastMessage b = find(id);
     if (b.getStatus() == BroadcastStatus.SENT)
       throw new IllegalArgumentException("Sent broadcasts cannot be deleted");
+    calendar.syncBroadcast(b);
     broadcasts.delete(b);
     activity.log(
         current.id(), ActivityType.LEAD_STAGE_CHANGED, "AUTOMATION", id, "Deleted broadcast");
@@ -85,7 +89,9 @@ public class BroadcastService {
   @Transactional
   public BroadcastResponse send(UUID id) {
     gates.require(current.get(), Feature.BULK_BROADCAST);
-    return mapper.broadcast(dispatch(find(id), current.id()));
+    BroadcastMessage b = dispatch(find(id), current.id());
+    calendar.syncBroadcast(b);
+    return mapper.broadcast(b);
   }
 
   @PreAuthorize("permitAll()")
@@ -97,6 +103,7 @@ public class BroadcastService {
     for (BroadcastMessage b : due) {
       try {
         dispatch(b, null);
+        calendar.syncBroadcast(b);
       } catch (Exception exception) {
         b.setStatus(BroadcastStatus.FAILED);
         broadcasts.save(b);
@@ -122,6 +129,7 @@ public class BroadcastService {
     b.setScheduledAt(when);
     b.setStatus(BroadcastStatus.WAITING);
     broadcasts.save(b);
+    calendar.syncBroadcast(b);
     activity.log(
         current.id(), ActivityType.LEAD_STAGE_CHANGED, "AUTOMATION", id, "Scheduled broadcast");
     return mapper.broadcast(b);

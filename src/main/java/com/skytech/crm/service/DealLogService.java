@@ -24,6 +24,7 @@ public class DealLogService {
   private final CurrentUserService current;
   private final ActivityService activity;
   private final CrmMapper mapper;
+  private final CalendarSyncService calendar;
 
   @Transactional(readOnly = true)
   public org.springframework.data.domain.Page<DealLogResponse> list(
@@ -43,6 +44,8 @@ public class DealLogService {
     l = logs.save(l);
     applyPaymentDelta(d, BigDecimal.ZERO, l.getAmountPaid());
     applyRetention(d, l);
+    calendar.syncDealRenewals(d);
+    calendar.syncDealLog(l);
     if (Optional.ofNullable(l.getAmountPaid()).orElse(BigDecimal.ZERO).signum() > 0)
       triggerPayment(d, l.getAmountPaid());
     activity.log(
@@ -68,6 +71,8 @@ public class DealLogService {
     l = logs.save(l);
     applyPaymentDelta(l.getDeal(), old, l.getAmountPaid());
     applyRetention(l.getDeal(), l);
+    calendar.syncDealLog(l);
+    calendar.syncDealRenewals(l.getDeal());
     if (Optional.ofNullable(l.getAmountPaid())
             .orElse(BigDecimal.ZERO)
             .compareTo(Optional.ofNullable(old).orElse(BigDecimal.ZERO))
@@ -83,6 +88,7 @@ public class DealLogService {
   public void delete(UUID dealId, UUID id) {
     DealLog l = log(dealId, id);
     applyPaymentDelta(l.getDeal(), l.getAmountPaid(), BigDecimal.ZERO);
+    calendar.syncDealLog(l);
     logs.delete(l);
     activity.log(current.id(), ActivityType.LEAD_LOG_CALL, "DEAL", dealId, "Deleted deal log");
   }
