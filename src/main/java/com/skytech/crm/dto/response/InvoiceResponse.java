@@ -51,7 +51,8 @@ public record InvoiceResponse(
       BigDecimal quantity,
       BigDecimal unitPrice,
       BigDecimal amount,
-      int position) {}
+      int position,
+      List<String> subLines) {}
 
   public record Payment(
       UUID id,

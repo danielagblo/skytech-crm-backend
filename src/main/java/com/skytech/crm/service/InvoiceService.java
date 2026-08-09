@@ -114,9 +114,9 @@ public class InvoiceService {
     Invoice invoice = accessible(id);
     requireStatus(invoice, InvoiceStatus.DRAFT, "Only draft invoices can be issued");
     LocalDate today = LocalDate.now();
-    if (invoice.getDueDate() == null) invoice.setDueDate(today.plusDays(14));
-    if (invoice.getDueDate() != null && invoice.getDueDate().isBefore(today))
-      throw new IllegalArgumentException("dueDate cannot be before the issue date");
+    LocalDate issueDate = invoice.getIssueDate() != null ? invoice.getIssueDate() : today;
+    if (invoice.getDueDate() == null) invoice.setDueDate(issueDate.plusDays(14));
+    invoice.setIssueDate(issueDate);
     long sequence = invoices.nextNumber();
     invoice.setInvoiceNumber("INV-" + today.getYear() + "-" + String.format("%06d", sequence));
     invoice.setIssueDate(today);
@@ -289,7 +289,8 @@ public class InvoiceService {
         request.getRecipientAddress() != null
             ? request.getRecipientAddress()
             : lead == null ? null : lead.getAddress());
-    invoice.setDueDate(request.getDueDate());
+    invoice.setIssueDate(request.getIssueDate());
+    invoice.setDueDate(issueDatePlus14(request.getIssueDate()));
     invoice.setCurrency(request.getCurrency().toUpperCase(Locale.ROOT));
     invoice.setTaxRate(request.getTaxRate());
     invoice.setDiscountAmount(request.getDiscountAmount());
@@ -311,6 +312,12 @@ public class InvoiceService {
               .multiply(itemRequest.unitPrice())
               .setScale(2, RoundingMode.HALF_UP));
       item.setPosition(position++);
+      item.setSubLines(
+          itemRequest.subLines() == null
+              ? List.of()
+              : itemRequest.subLines().stream()
+                  .filter(l -> l != null && !l.isBlank())
+                  .toList());
       invoice.getItems().add(item);
       subtotal = subtotal.add(item.getAmount());
     }
@@ -325,6 +332,10 @@ public class InvoiceService {
     invoice.setTaxAmount(tax);
     invoice.setTotal(beforeDiscount.subtract(request.getDiscountAmount()).setScale(2));
     invoice.setBalanceDue(invoice.getTotal().subtract(invoice.getAmountPaid()).max(BigDecimal.ZERO));
+  }
+
+  private LocalDate issueDatePlus14(LocalDate issueDate) {
+    return issueDate == null ? null : issueDate.plusDays(14);
   }
 
   private String leadName(Lead lead) {

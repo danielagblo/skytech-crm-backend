@@ -28,7 +28,7 @@ public class InvoiceRequest {
   private String recipientEmail;
 
   private String recipientAddress;
-  private LocalDate dueDate;
+  private LocalDate issueDate;
 
   @NotBlank
   @Pattern(regexp = "[A-Z]{3}")
@@ -58,5 +58,6 @@ public class InvoiceRequest {
       @NotBlank @Size(max = 500) String description,
       @NotNull @DecimalMin(value = "0.0001") @Digits(integer = 11, fraction = 4)
           BigDecimal quantity,
-      @NotNull @PositiveOrZero @Digits(integer = 13, fraction = 2) BigDecimal unitPrice) {}
+      @NotNull @PositiveOrZero @Digits(integer = 13, fraction = 2) BigDecimal unitPrice,
+      List<@Size(max = 500) String> subLines) {}
 }

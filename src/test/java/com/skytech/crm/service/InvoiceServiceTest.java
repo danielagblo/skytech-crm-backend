@@ -48,7 +48,8 @@ class InvoiceServiceTest {
     request.setItems(
         List.of(
             new InvoiceRequest.InvoiceItemRequest(
-                "CRM implementation", new BigDecimal("2"), new BigDecimal("100"))));
+                "CRM implementation", new BigDecimal("2"), new BigDecimal("100"),
+                List.of())));
 
     service.create(request);
 
@@ -173,6 +174,6 @@ class InvoiceServiceTest {
         .setItems(
             List.of(
                 new InvoiceRequest.InvoiceItemRequest(
-                    "CRM implementation", BigDecimal.ONE, new BigDecimal("100"))));
+                    "CRM implementation", BigDecimal.ONE, new BigDecimal("100"), List.of())));
   }
 }

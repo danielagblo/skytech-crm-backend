@@ -2,6 +2,7 @@ package com.skytech.crm.entity;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.util.*;
 import lombok.*;
 
 @Entity
@@ -28,4 +29,12 @@ public class InvoiceItem extends BaseEntity {
 
   @Column(nullable = false)
   private int position;
+
+  @ElementCollection(fetch = FetchType.EAGER)
+  @CollectionTable(
+      name = "invoice_item_sublines",
+      joinColumns = @JoinColumn(name = "invoice_item_id"))
+  @OrderColumn(name = "position")
+  @Column(name = "label", nullable = false, length = 500)
+  private List<String> subLines = new ArrayList<>();
 }

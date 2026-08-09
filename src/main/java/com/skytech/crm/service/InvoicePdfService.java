@@ -157,6 +157,11 @@ public class InvoicePdfService {
               money(currency, item.getUnitPrice()),
               money(currency, item.getAmount()));
       text(line, REGULAR, 8);
+      for (String subLine : item.getSubLines()) {
+        String sub = subLine;
+        if (sub.length() > 60) sub = sub.substring(0, 57) + "...";
+        text("    -- " + sub, REGULAR, 7);
+      }
     }
 
     private void space(float amount) throws IOException {
