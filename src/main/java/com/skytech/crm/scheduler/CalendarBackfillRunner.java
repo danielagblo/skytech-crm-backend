@@ -5,6 +5,7 @@ import com.skytech.crm.repository.*;
 import com.skytech.crm.service.CalendarSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -26,9 +27,16 @@ public class CalendarBackfillRunner implements ApplicationRunner {
   private final DealRepository deals;
   private final CalendarSyncService calendar;
 
+  @Value("${app.backfill-on-startup:true}")
+  private boolean backfillOnStartup;
+
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
+    if (!backfillOnStartup) {
+      log.debug("Calendar backfill disabled via app.backfill-on-startup");
+      return;
+    }
     int count = 0;
     for (Task task : tasks.findAll()) {
       calendar.syncTask(task);

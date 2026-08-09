@@ -36,6 +36,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
       "spring.jpa.hibernate.ddl-auto=none",
       "spring.flyway.enabled=false",
       "spring.task.scheduling.enabled=false",
+      "app.backfill-on-startup=false",
       "jwt.secret=01234567890123456789012345678901"
     })
 @AutoConfigureMockMvc

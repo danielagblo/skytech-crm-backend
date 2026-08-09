@@ -26,6 +26,7 @@ class DealLogServiceTest {
   @Mock CurrentUserService current;
   @Mock ActivityService activity;
   @Mock CrmMapper mapper;
+  @Mock CalendarSyncService calendar;
   @InjectMocks DealLogService service;
 
   @Test
