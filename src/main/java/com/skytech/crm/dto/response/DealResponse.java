@@ -25,6 +25,13 @@ public record DealResponse(
     BigDecimal domainCost,
     BigDecimal maintenanceCost,
     String notes,
+    String customerFirstName,
+    String customerLastName,
+    String customerEmail,
+    String customerPhone,
+    String customerCompany,
+    String customerAddress,
+    String customerCategory,
     Long version,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt) {}

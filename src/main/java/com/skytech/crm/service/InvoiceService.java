@@ -381,7 +381,9 @@ public class InvoiceService {
   }
 
   private void checkVersion(Invoice invoice, Long version) {
-    if (version != null && !Objects.equals(version, invoice.getVersion()))
+    if (version == null)
+      throw new IllegalArgumentException("version is required when replacing a draft invoice");
+    if (!Objects.equals(version, invoice.getVersion()))
       throw new ObjectOptimisticLockingFailureException(Invoice.class, invoice.getId());
   }
 }

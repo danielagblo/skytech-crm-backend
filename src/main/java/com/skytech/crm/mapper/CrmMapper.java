@@ -18,6 +18,13 @@ public interface CrmMapper {
   @Mapping(target = "createdById", source = "createdBy.id")
   @Mapping(target = "assignedToId", source = "assignedTo.id")
   @Mapping(target = "paidInFull", source = "paidInFull")
+  @Mapping(target = "customerFirstName", source = "lead.firstName")
+  @Mapping(target = "customerLastName", source = "lead.lastName")
+  @Mapping(target = "customerEmail", source = "lead.email")
+  @Mapping(target = "customerPhone", source = "lead.phone1")
+  @Mapping(target = "customerCompany", source = "lead.companyName")
+  @Mapping(target = "customerAddress", source = "lead.address")
+  @Mapping(target = "customerCategory", source = "lead.category")
   DealResponse deal(Deal value);
 
   @Mapping(target = "dealId", source = "deal.id")

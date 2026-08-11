@@ -144,6 +144,58 @@ class InvoiceServiceTest {
     assertThat(event.getValue().email()).isEqualTo("billing@example.com");
   }
 
+  @Test
+  void draftReplacementRequiresTheReturnedVersion() {
+    UUID invoiceId = UUID.randomUUID(), dealId = UUID.randomUUID();
+    User admin = admin();
+    Invoice invoice = invoice(invoiceId, deal(dealId, admin));
+    invoice.setVersion(3L);
+    when(current.get()).thenReturn(admin);
+    when(invoices.findById(invoiceId)).thenReturn(Optional.of(invoice));
+    when(deals.findById(dealId)).thenReturn(Optional.of(invoice.getDeal()));
+    InvoiceRequest replacement = request(dealId);
+
+    assertThatThrownBy(() -> service.update(invoiceId, replacement))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("version is required");
+    verify(invoices, never()).save(invoice);
+  }
+
+  @Test
+  void draftUpdateCompletelyReplacesItemsAndSublines() {
+    UUID invoiceId = UUID.randomUUID(), dealId = UUID.randomUUID();
+    User admin = admin();
+    Invoice invoice = invoice(invoiceId, deal(dealId, admin));
+    invoice.setVersion(3L);
+    InvoiceItem old = new InvoiceItem();
+    old.setInvoice(invoice);
+    old.setDescription("Old line");
+    old.setSubLines(new ArrayList<>(List.of("Old sub-line")));
+    invoice.getItems().add(old);
+    when(current.get()).thenReturn(admin);
+    when(current.id()).thenReturn(admin.getId());
+    when(invoices.findById(invoiceId)).thenReturn(Optional.of(invoice));
+    when(deals.findById(dealId)).thenReturn(Optional.of(invoice.getDeal()));
+    when(invoices.save(invoice)).thenReturn(invoice);
+    InvoiceRequest replacement = request(dealId);
+    replacement.setVersion(3L);
+    replacement.setItems(
+        List.of(
+            new InvoiceRequest.InvoiceItemRequest(
+                "Replacement line",
+                new BigDecimal("2"),
+                new BigDecimal("25"),
+                List.of("New sub-line"))));
+
+    service.update(invoiceId, replacement);
+
+    assertThat(invoice.getItems()).singleElement().satisfies(item -> {
+      assertThat(item.getDescription()).isEqualTo("Replacement line");
+      assertThat(item.getSubLines()).containsExactly("New sub-line");
+      assertThat(item.getAmount()).isEqualByComparingTo("50.00");
+    });
+  }
+
   private User admin() {
     User user = new User();
     user.setId(UUID.randomUUID());
