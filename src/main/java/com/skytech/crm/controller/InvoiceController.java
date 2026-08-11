@@ -70,6 +70,11 @@ public class InvoiceController extends BaseController {
     return ok(invoices.send(id, request));
   }
 
+  @PostMapping("/{id}/confirm-reception")
+  ApiResponse<?> confirmReception(@PathVariable UUID id) {
+    return ok(invoices.confirmReception(id));
+  }
+
   @PostMapping("/{id}/payments")
   ApiResponse<?> payment(
       @PathVariable UUID id, @Valid @RequestBody InvoicePaymentRequest request) {

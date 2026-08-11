@@ -27,6 +27,7 @@ class DealLogServiceTest {
   @Mock ActivityService activity;
   @Mock CrmMapper mapper;
   @Mock CalendarSyncService calendar;
+  @Mock InAppNotificationService inAppNotifications;
   @InjectMocks DealLogService service;
 
   @Test
