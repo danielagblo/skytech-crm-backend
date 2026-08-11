@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import com.skytech.crm.entity.Task;
+import com.skytech.crm.entity.*;
 import com.skytech.crm.enums.*;
 import com.skytech.crm.mapper.CrmMapper;
 import com.skytech.crm.repository.*;
@@ -23,8 +23,10 @@ class TaskServiceTest {
   @Mock UserRepository users;
   @Mock LeadRepository leads;
   @Mock DealRepository deals;
+  @Mock CalendarEventRepository calendarEvents;
   @Mock CurrentUserService current;
   @Mock ActivityService activity;
+  @Mock InAppNotificationService inAppNotifications;
   @Mock CrmMapper mapper;
   @InjectMocks TaskService service;
 
@@ -50,5 +52,26 @@ class TaskServiceTest {
             "TASK",
             todo.getId(),
             "Task automatically marked overdue");
+  }
+
+  @Test
+  void reasonOnlyUpdateDoesNotForceTaskToDoneAndNotifiesManagement() {
+    User manager = new User();
+    manager.setId(java.util.UUID.randomUUID());
+    manager.setRole(Role.MANAGER);
+    Task task = new Task();
+    task.setId(java.util.UUID.randomUUID());
+    task.setTitle("Call customer");
+    task.setStatus(TaskStatus.DOING);
+    when(current.get()).thenReturn(manager);
+    when(current.id()).thenReturn(manager.getId());
+    when(tasks.findById(task.getId())).thenReturn(java.util.Optional.of(task));
+
+    service.status(task.getId(), null, "Waiting for customer documents");
+
+    assertThat(task.getStatus()).isEqualTo(TaskStatus.DOING);
+    assertThat(task.getCompletionReason()).isEqualTo("Waiting for customer documents");
+    verify(inAppNotifications)
+        .notifyTaskReason(task, manager, "Waiting for customer documents");
   }
 }

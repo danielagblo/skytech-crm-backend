@@ -26,11 +26,17 @@ public class DashboardService {
   private final FeatureGateService gates;
 
   @Transactional(readOnly = true)
-    public DashboardOverviewResponse overview(String period) {
+  public DashboardOverviewResponse overview(String period) {
+    return overview(period, null);
+  }
+
+  @Transactional(readOnly = true)
+  public DashboardOverviewResponse overview(String period, UUID requestedUserId) {
     User me = current.get();
+        UUID scopedUserId = dashboardScope(me, requestedUserId);
         OffsetDateTime start = periodStart(period);
         Set<UUID> visibleDealIds =
-            visibleDeals(me).stream()
+            visibleDeals(me, scopedUserId).stream()
                 .map(Deal::getId)
                 .collect(java.util.stream.Collectors.toSet());
     List<DealLog> visibleLogs =
@@ -40,16 +46,25 @@ public class DashboardService {
                                 .filter(log -> logRecent(log, start))
                                 .toList();
     List<Deal> visibleDeals =
-        visibleDeals(me).stream().filter(deal -> dealRecent(deal, start)).toList();
+        visibleDeals(me, scopedUserId).stream().filter(deal -> dealRecent(deal, start)).toList();
 
-    List<User> visibleUsers = me.getRole() == Role.AGENT ? List.of(me) : users.findAll();
+    List<User> visibleUsers =
+        scopedUserId == null
+            ? users.findAll().stream()
+                .filter(user -> Objects.equals(user.getCompanyId(), me.getCompanyId()))
+                .toList()
+            : List.of(
+                users
+                    .findById(scopedUserId)
+                    .filter(user -> Objects.equals(user.getCompanyId(), me.getCompanyId()))
+                    .orElseThrow(() -> new ResourceNotFoundException("User")));
     List<DashboardOverviewResponse.AgentRevenue> revenue =
         visibleUsers.stream()
             .filter(user -> user.isActive() && user.getRole() == Role.AGENT)
             .map(
                 user ->
                     new DashboardOverviewResponse.AgentRevenue(
-                        user.getId(), user.fullName(), revenue(user.getId())))
+                        user.getId(), user.fullName(), revenue(user.getId(), start)))
             .sorted(
                 Comparator.comparing(DashboardOverviewResponse.AgentRevenue::revenue).reversed())
             .limit(10)
@@ -168,17 +183,25 @@ public class DashboardService {
 
   @Transactional(readOnly = true)
   public Page<TopDealResponse> topDeals(String period, Pageable pageable) {
+    return topDeals(period, null, pageable);
+  }
+
+  @Transactional(readOnly = true)
+  public Page<TopDealResponse> topDeals(String period, UUID requestedUserId, Pageable pageable) {
     User me = current.get();
+    UUID scopedUserId = dashboardScope(me, requestedUserId);
     gates.require(me, Feature.ADVANCED_REPORTS);
     OffsetDateTime cutoff =
         switch (period == null ? "last_6_months" : period) {
+          case "today", "this_week", "this_month", "three_months" -> periodStart(period);
           case "last_6_months" -> OffsetDateTime.now().minusMonths(6);
           case "last_year" -> OffsetDateTime.now().minusYears(1);
           default ->
-              throw new IllegalArgumentException("period must be last_6_months or last_year");
+              throw new IllegalArgumentException(
+                  "period must be today, this_week, this_month, three_months, last_6_months, or last_year");
         };
     List<TopDealResponse> sorted =
-        visibleDeals(me).stream()
+            visibleDeals(me, scopedUserId).stream()
             .filter(deal -> deal.getCreatedAt() == null || !deal.getCreatedAt().isBefore(cutoff))
             .sorted(
                 Comparator.comparing(
@@ -255,14 +278,39 @@ public class DashboardService {
             log.getDeal().getId(), log.getDeal().getTitle(), time, type);
   }
 
-  private List<Deal> visibleDeals(User user) {
-    return user.getRole() == Role.AGENT ? deals.findByAssignedToId(user.getId()) : deals.findAll();
+  private List<Deal> visibleDeals(User user, UUID scopedUserId) {
+    if (scopedUserId != null) return deals.findByAssignedToId(scopedUserId);
+    return deals.findAll().stream()
+        .filter(deal -> Objects.equals(deal.getCompanyId(), user.getCompanyId()))
+        .toList();
   }
 
   private BigDecimal revenue(UUID userId) {
     return deals.findByAssignedToId(userId).stream()
         .map(this::paid)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  private BigDecimal revenue(UUID userId, OffsetDateTime start) {
+    return deals.findByAssignedToId(userId).stream()
+        .filter(deal -> dealRecent(deal, start))
+        .map(this::paid)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  private UUID dashboardScope(User actor, UUID requestedUserId) {
+    if (actor.getRole() == Role.AGENT) {
+      if (requestedUserId != null && !actor.getId().equals(requestedUserId))
+        throw new ForbiddenException("Agents may only view their own dashboard data");
+      return actor.getId();
+    }
+    if (requestedUserId != null) {
+      User requested =
+          users.findById(requestedUserId).orElseThrow(() -> new ResourceNotFoundException("User"));
+      if (!Objects.equals(requested.getCompanyId(), actor.getCompanyId()))
+        throw new ForbiddenException("User belongs to another tenant");
+    }
+    return requestedUserId;
   }
 
   private BigDecimal paid(Deal deal) {
@@ -277,7 +325,9 @@ public class DashboardService {
   }
 
   private List<User> agents() {
+    UUID companyId = current.get().getCompanyId();
     return users.findAll().stream()
+        .filter(user -> Objects.equals(user.getCompanyId(), companyId))
         .filter(user -> user.isActive() && user.getRole() == Role.AGENT)
         .toList();
   }

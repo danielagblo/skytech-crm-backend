@@ -15,15 +15,18 @@ public class DashboardController extends BaseController {
   private final DashboardService dashboard;
 
   @GetMapping("/overview")
-  ApiResponse<?> overview(@RequestParam(defaultValue = "today") String period) {
-    return ok(dashboard.overview(period));
+  ApiResponse<?> overview(
+      @RequestParam(defaultValue = "today") String period,
+      @RequestParam(name = "user_id", required = false) UUID userId) {
+    return ok(dashboard.overview(period, userId));
   }
 
   @GetMapping("/top-deals")
   ApiResponse<?> top(
       @RequestParam(defaultValue = "last_6_months") String period,
+      @RequestParam(name = "user_id", required = false) UUID userId,
       @PageableDefault(size = 20) Pageable pageable) {
-    return ok(dashboard.topDeals(period, pageable));
+    return ok(dashboard.topDeals(period, userId, pageable));
   }
 
   @GetMapping("/agent-stats/{userId}")
