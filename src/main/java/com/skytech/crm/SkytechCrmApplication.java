@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableAsync
 @EnableScheduling
 @SpringBootApplication
-public class SkytechCrmApplication {
+public class SkytechCrmApplication { 
   public static void main(String[] args) {
     SpringApplication.run(SkytechCrmApplication.class, args);
   }
