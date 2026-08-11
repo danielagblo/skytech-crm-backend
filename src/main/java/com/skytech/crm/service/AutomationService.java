@@ -8,6 +8,8 @@ import com.skytech.crm.enums.*;
 import com.skytech.crm.exception.ResourceNotFoundException;
 import com.skytech.crm.mapper.CrmMapper;
 import com.skytech.crm.repository.AutomationRepository;
+import com.skytech.crm.repository.LeadRepository;
+import java.time.*;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
@@ -25,6 +27,7 @@ public class AutomationService {
   private final ActivityService activity;
   private final CrmMapper mapper;
   private final CalendarSyncService calendar;
+  private final LeadRepository leads;
 
   @Transactional(readOnly = true)
   public Page<AutomationResponse> list(Pageable p) {
@@ -44,7 +47,7 @@ public class AutomationService {
             new AutomationOptionsResponse.TypeOption(
                 AutomationType.PAYMENT, true, "DEAL_PAYMENT_RECORDED", List.of()),
         new AutomationOptionsResponse.TypeOption(
-          AutomationType.PERSONAL, true, "DATE", List.of("date", "contactIds"))),
+          AutomationType.PERSONAL, true, "DATE", List.of("date", "contact_ids"))),
         List.of("SMS", "EMAIL", "BOTH"),
         List.of("channel", "subject", "message"));
   }
@@ -54,6 +57,7 @@ public class AutomationService {
     gates.require(current.get(), Feature.AUTOMATION_BUILDER);
     Automation a = new Automation();
     a.setCreatedBy(current.get());
+    a.setCompanyId(current.get().getCompanyId());
     apply(a, r);
     automations.save(a);
     calendar.syncAutomation(a);
@@ -123,6 +127,15 @@ public class AutomationService {
     if (r.getActive() != null) a.setActive(r.getActive());
     a.setTriggerConfig(r.getTriggerConfig() == null ? Map.of() : r.getTriggerConfig());
     a.setSteps(r.getSteps() == null ? List.of() : r.getSteps());
+    UUID[] contacts = personalContacts(r);
+    a.setContactIds(contacts);
+    a.setFailureReason(null);
+    a.setRecipientCount(0);
+    if (r.getAutomationType() == AutomationType.PERSONAL) {
+      a.setExecutionState("WAITING");
+      LocalDate date = LocalDate.parse(String.valueOf(r.getTriggerConfig().get("date")));
+      a.setNextRunAt(date.atTime(7, 0).atOffset(ZoneOffset.UTC));
+    }
   }
 
   private void validate(AutomationRequest request) {
@@ -135,8 +148,14 @@ public class AutomationService {
             request.getAutomationType() == AutomationType.PERSONAL
                 ? "Personal automations require triggerConfig.date in YYYY-MM-DD format"
                 : "Public holiday automations require triggerConfig.date in YYYY-MM-DD format");
+      String dateValue = String.valueOf(date);
+      if (!dateValue.matches("\\d{4}-\\d{2}-\\d{2}"))
+        throw new IllegalArgumentException(
+            request.getAutomationType() == AutomationType.PERSONAL
+                ? "Personal triggerConfig.date must use YYYY-MM-DD format"
+                : "Public holiday triggerConfig.date must use YYYY-MM-DD format");
       try {
-        java.time.LocalDate.parse(String.valueOf(date));
+        java.time.LocalDate.parse(dateValue);
       } catch (java.time.format.DateTimeParseException exception) {
         throw new IllegalArgumentException(
             request.getAutomationType() == AutomationType.PERSONAL
@@ -145,11 +164,9 @@ public class AutomationService {
       }
     }
     if (request.getAutomationType() == AutomationType.PERSONAL) {
-      Object contactIds =
-          request.getTriggerConfig() == null ? null : request.getTriggerConfig().get("contactIds");
-      if (!(contactIds instanceof Collection<?> collection) || collection.isEmpty()) {
+      if (personalContacts(request).length == 0) {
         throw new IllegalArgumentException(
-            "Personal automations require at least one triggerConfig.contactIds entry");
+            "Personal automations require at least one contact_ids entry");
       }
     }
     if (request.getSteps() == null) return;
@@ -164,5 +181,31 @@ public class AutomationService {
       if (message == null || String.valueOf(message).isBlank())
         throw new IllegalArgumentException("Automation step " + index + " requires a message");
     }
+  }
+
+  private UUID[] personalContacts(AutomationRequest request) {
+    if (request.getAutomationType() != AutomationType.PERSONAL) return new UUID[0];
+    LinkedHashSet<UUID> ids = new LinkedHashSet<>();
+    if (request.getContactIds() != null) ids.addAll(Arrays.asList(request.getContactIds()));
+    Map<String, Object> trigger = request.getTriggerConfig();
+    if (trigger != null) {
+      Object legacy = trigger.containsKey("contactIds") ? trigger.get("contactIds") : trigger.get("contact_ids");
+      if (legacy instanceof Collection<?> values)
+        for (Object value : values) {
+          try {
+            ids.add(UUID.fromString(String.valueOf(value)));
+          } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Invalid personal automation contact id: " + value);
+          }
+        }
+    }
+    if (!ids.isEmpty()) {
+      List<Lead> contacts = leads.findAllById(ids);
+      if (contacts.size() != ids.size()) throw new ResourceNotFoundException("Automation contact");
+      UUID companyId = current.get().getCompanyId();
+      if (contacts.stream().anyMatch(lead -> !Objects.equals(lead.getCompanyId(), companyId)))
+        throw new IllegalArgumentException("Automation contacts must belong to the current tenant");
+    }
+    return ids.toArray(UUID[]::new);
   }
 }

@@ -87,4 +87,31 @@ class DatabaseContractTest {
         .contains("invoices_updated_at")
         .doesNotContain("serial", "bigserial");
   }
+
+  @Test
+  void contractHardeningMigrationsAddUniquenessAndExecutionState() throws Exception {
+    String leadMigration;
+    try (var stream =
+        getClass().getResourceAsStream("/db/migration/V12__lead_deal_contract.sql")) {
+      assertThat(stream).isNotNull();
+      leadMigration = new String(stream.readAllBytes(), StandardCharsets.UTF_8).toLowerCase();
+    }
+    String communicationMigration;
+    try (var stream =
+        getClass().getResourceAsStream(
+            "/db/migration/V13__automation_broadcast_execution.sql")) {
+      assertThat(stream).isNotNull();
+      communicationMigration =
+          new String(stream.readAllBytes(), StandardCharsets.UTF_8).toLowerCase();
+    }
+    assertThat(leadMigration)
+        .contains("create unique index uq_deals_lead_id")
+        .contains("check (category is null or category in");
+    assertThat(communicationMigration)
+        .contains("add column contact_ids uuid[]")
+        .contains("add column execution_state")
+        .contains("add column next_run_at")
+        .contains("add column failure_reason")
+        .contains("add column failure_details");
+  }
 }

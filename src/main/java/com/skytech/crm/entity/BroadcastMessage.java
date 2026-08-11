@@ -29,9 +29,16 @@ public class BroadcastMessage extends BaseEntity {
 
   private int recipientCount;
 
+  @JdbcTypeCode(SqlTypes.ARRAY)
+  @Column(columnDefinition = "uuid[]")
+  private UUID[] contactIds;
+
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(columnDefinition = "jsonb")
   private Map<String, Object> segmentFilter;
+
+  @Column(columnDefinition = "text")
+  private String failureDetails;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by")

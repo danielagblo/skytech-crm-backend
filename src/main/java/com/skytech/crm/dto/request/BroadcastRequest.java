@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import jakarta.validation.constraints.*;
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.UUID;
 import lombok.*;
 import lombok.experimental.Accessors;
 
@@ -24,5 +25,6 @@ public class BroadcastRequest {
   private String channel;
 
   private Map<String, Object> segmentFilter;
+  private UUID[] contactIds;
   @Future private OffsetDateTime scheduledAt;
 }
