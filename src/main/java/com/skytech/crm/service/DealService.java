@@ -114,6 +114,9 @@ public class DealService {
     checkOwn(d);
     DealStage old = d.getStage();
     if (old == stage) return mapper.deal(d);
+    if (stage == DealStage.CLIENT_RETENTION && !d.isPaidInFull())
+      throw new IllegalArgumentException(
+          "A deal cannot move to client retention until the contract is paid in full");
     d.setStage(stage);
     d = deals.save(d);
     DealLog transition = new DealLog();

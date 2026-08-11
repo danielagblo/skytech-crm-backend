@@ -265,6 +265,7 @@ public class LeadService {
   }
 
   private void apply(Lead l, LeadRequest r) {
+    validateCommunicationPreferences(r);
     if (r.getAssignedTo() != null)
       for (UUID id : r.getAssignedTo())
         if (!users.existsById(id)) throw new ResourceNotFoundException("Assignee");
@@ -292,5 +293,15 @@ public class LeadService {
     if (r.getNewsletterOptIn() != null) l.setNewsletterOptIn(r.getNewsletterOptIn());
     l.setDescription(r.getDescription());
     if (r.getConversionScore() != null) l.setConversionScore(r.getConversionScore());
+  }
+
+  private void validateCommunicationPreferences(LeadRequest r) {
+    if (Boolean.TRUE.equals(r.getSmsOptIn())
+        && (r.getPhone1() == null || r.getPhone1().isBlank()))
+      throw new IllegalArgumentException("A phone number is required when SMS communication is selected");
+    if ((Boolean.TRUE.equals(r.getEmailOptIn()) || Boolean.TRUE.equals(r.getNewsletterOptIn()))
+        && (r.getEmail() == null || r.getEmail().isBlank()))
+      throw new IllegalArgumentException(
+          "An email address is required when email communication or the newsletter is selected");
   }
 }

@@ -123,6 +123,9 @@ class InvoiceServiceTest {
     UUID invoiceId = UUID.randomUUID(), dealId = UUID.randomUUID();
     User admin = admin();
     Invoice invoice = invoice(invoiceId, deal(dealId, admin));
+    Lead lead = new Lead();
+    lead.setEmailOptIn(true);
+    invoice.getDeal().setLead(lead);
     invoice.setStatus(InvoiceStatus.ISSUED);
     invoice.setInvoiceNumber("INV-2026-000001");
     invoice.setRecipientEmail("billing@example.com");

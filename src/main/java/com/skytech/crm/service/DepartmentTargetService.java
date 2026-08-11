@@ -25,6 +25,7 @@ public class DepartmentTargetService {
   private final DealRepository deals;
   private final DealLogRepository dealLogs;
   private final CurrentUserService current;
+  private final InAppNotificationService notifications;
 
   @Value("${app.time-zone:Africa/Accra}")
   private String timeZone;
@@ -61,6 +62,7 @@ public class DepartmentTargetService {
       row.setEnabled(input.enabled());
       targets.save(row);
     }
+    notifications.announceTargets(normalized, current.get());
     return getConfig(normalized);
   }
 

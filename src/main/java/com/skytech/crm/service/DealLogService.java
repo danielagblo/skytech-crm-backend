@@ -25,6 +25,7 @@ public class DealLogService {
   private final ActivityService activity;
   private final CrmMapper mapper;
   private final CalendarSyncService calendar;
+  private final InAppNotificationService inAppNotifications;
 
   @Transactional(readOnly = true)
   public org.springframework.data.domain.Page<DealLogResponse> list(
@@ -48,6 +49,8 @@ public class DealLogService {
     calendar.syncDealLog(l);
     if (Optional.ofNullable(l.getAmountPaid()).orElse(BigDecimal.ZERO).signum() > 0)
       triggerPayment(d, l.getAmountPaid());
+    if ("PAYMENT".equals(l.getLogType()))
+      inAppNotifications.notifyPaymentLogged(d, l, current.get());
     activity.log(
         current.id(),
         ActivityType.LEAD_LOG_CALL,
@@ -188,6 +191,8 @@ public class DealLogService {
         l.setSettlementValue(r.getSettlementValue());
         l.setSettlementFollowUp(r.getSettlementFollowUp());
         l.setSpecialConditions(r.getSpecialConditions());
+        l.getDeal().setContractValue(r.getSettlementValue());
+        recalculateDeal(l.getDeal());
       }
       case "PAYMENT" -> {
         l.setAmountPaid(r.getAmountPaid());
@@ -280,6 +285,14 @@ public class DealLogService {
     d.setArrears(contract.subtract(paid).max(BigDecimal.ZERO));
     d.setPaidInFull(contract.signum() > 0 && paid.compareTo(contract) >= 0);
     deals.save(d);
+  }
+
+  private void recalculateDeal(Deal deal) {
+    BigDecimal contract = Optional.ofNullable(deal.getContractValue()).orElse(BigDecimal.ZERO);
+    BigDecimal paid = Optional.ofNullable(deal.getTotalPaid()).orElse(BigDecimal.ZERO);
+    deal.setArrears(contract.subtract(paid).max(BigDecimal.ZERO));
+    deal.setPaidInFull(contract.signum() > 0 && paid.compareTo(contract) >= 0);
+    deals.save(deal);
   }
 
   private void applyRetention(Deal d, DealLog l) {

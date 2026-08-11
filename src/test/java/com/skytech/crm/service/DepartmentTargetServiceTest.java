@@ -30,12 +30,13 @@ class DepartmentTargetServiceTest {
     deals = mock(DealRepository.class);
     dealLogs = mock(DealLogRepository.class);
     CurrentUserService current = mock(CurrentUserService.class);
+    InAppNotificationService notifications = mock(InAppNotificationService.class);
 
     User manager = new User();
     manager.setCompanyId(companyId);
     when(current.get()).thenReturn(manager);
 
-    service = new DepartmentTargetService(targets, users, deals, dealLogs, current);
+    service = new DepartmentTargetService(targets, users, deals, dealLogs, current, notifications);
     ReflectionTestUtils.setField(service, "timeZone", "UTC");
   }
 

@@ -99,6 +99,12 @@ public class Invoice extends BaseEntity {
   private OffsetDateTime sentAt;
   private OffsetDateTime paidAt;
   private OffsetDateTime voidedAt;
+  private boolean receptionConfirmed;
+  private OffsetDateTime receptionConfirmedAt;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "reception_confirmed_by")
+  private User receptionConfirmedBy;
 
   @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
   @OrderBy("position ASC")

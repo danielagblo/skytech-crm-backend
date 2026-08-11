@@ -47,6 +47,7 @@ public interface CrmMapper {
 
   @Mapping(target = "dealId", source = "deal.id")
   @Mapping(target = "createdById", source = "createdBy.id")
+  @Mapping(target = "receptionConfirmedById", source = "receptionConfirmedBy.id")
   InvoiceResponse invoice(Invoice value);
 
   InvoiceResponse.Item invoiceItem(InvoiceItem value);

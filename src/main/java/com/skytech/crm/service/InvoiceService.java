@@ -153,6 +153,10 @@ public class InvoiceService {
         && invoice.getSendRequestedAt() != null
         && invoice.getSendRequestedAt().isAfter(OffsetDateTime.now().minusMinutes(10)))
       throw new IllegalArgumentException("Invoice delivery is already in progress");
+    Lead lead = invoice.getDeal().getLead();
+    if (lead == null || !lead.isEmailOptIn())
+      throw new IllegalArgumentException(
+          "This client has not consented to email communication. Print the invoice and confirm reception instead.");
     String recipient =
         request.email() == null || request.email().isBlank()
             ? invoice.getRecipientEmail()
@@ -179,6 +183,26 @@ public class InvoiceService {
         "DEAL",
         id,
         "Queued invoice " + invoice.getInvoiceNumber() + " for delivery");
+    return mapper.invoice(invoice);
+  }
+
+  @Transactional
+  public InvoiceResponse confirmReception(UUID id) {
+    Invoice invoice = accessible(id);
+    if (invoice.getStatus() == InvoiceStatus.DRAFT || invoice.getStatus() == InvoiceStatus.VOID)
+      throw new IllegalArgumentException("Only an active issued invoice can be confirmed as received");
+    if (!invoice.isReceptionConfirmed()) {
+      invoice.setReceptionConfirmed(true);
+      invoice.setReceptionConfirmedAt(OffsetDateTime.now());
+      invoice.setReceptionConfirmedBy(current.get());
+      invoice = invoices.save(invoice);
+      activity.log(
+          current.id(),
+          ActivityType.LEAD_STAGE_CHANGED,
+          "DEAL",
+          invoice.getDeal().getId(),
+          "Confirmed reception of invoice " + invoice.getInvoiceNumber());
+    }
     return mapper.invoice(invoice);
   }
 
