@@ -67,6 +67,8 @@ The Stripe SDK client is wired from `STRIPE_SECRET_KEY`, but no billing operatio
 
 Invoice and automation frontend request examples, lifecycle rules, PDF handling, and status behavior are documented in [`docs/FRONTEND_INVOICES_AUTOMATIONS.md`](docs/FRONTEND_INVOICES_AUTOMATIONS.md).
 
+The August 2026 authentication, lead/deal, personal automation, broadcast, dashboard/task, and invoice contract changes are documented in [`docs/FRONTEND_CONTRACT_2026_08.md`](docs/FRONTEND_CONTRACT_2026_08.md).
+
 ## Run locally
 
 PowerShell example:
