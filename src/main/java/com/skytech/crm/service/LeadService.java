@@ -242,6 +242,8 @@ public class LeadService {
   //       .orElseThrow(() -> new IllegalArgumentException("No active agents available"));
   // }
 
+
+  // this version assigns to the least loaded agent, regardless of whether they are online or not
   private UUID leastLoadedActiveAgent() {
     return users.findAll().stream()
         .filter(user -> user.getRole() == Role.AGENT && user.isActive())
