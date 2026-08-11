@@ -58,6 +58,23 @@ class AuthServiceTest {
     verify(fixture.tokens, never()).access(any());
   }
 
+  @Test
+  void refreshReturnsANewAccessTokenWithoutInvalidatingTheRefreshSession() {
+    Fixture fixture = new Fixture(false);
+    fixture.service.login(new AuthRequests.Login(fixture.user.getEmail(), "password"));
+    when(fixture.tokens.valid("refresh-token", "refresh")).thenReturn(true);
+    when(fixture.tokens.userId("refresh-token")).thenReturn(fixture.user.getId());
+    when(fixture.users.findById(fixture.user.getId())).thenReturn(Optional.of(fixture.user));
+    when(fixture.tokens.access(fixture.user)).thenReturn("refreshed-access-token");
+
+    AuthResponse.AccessToken response =
+        fixture.service.refresh(new AuthRequests.Refresh("refresh-token"));
+
+    assertThat(response.accessToken()).isEqualTo("refreshed-access-token");
+    assertThat(fixture.user.getRefreshTokenHash()).isNotBlank();
+    verify(fixture.users, times(1)).save(fixture.user);
+  }
+
   private static final class Fixture {
     private final UserRepository users = mock(UserRepository.class);
     private final PasswordEncoder passwords = mock(PasswordEncoder.class);

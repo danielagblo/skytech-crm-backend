@@ -20,6 +20,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class LeadService {
+  private static final Set<String> CATEGORIES =
+      Set.of(
+          "Hospitality",
+          "Retail & E-commerce",
+          "Education",
+          "Tourism & Logistics",
+          "Real estate & construction",
+          "Healthcare",
+          "Tech",
+          "NGO",
+          "Religion",
+          "Other");
   private final LeadRepository leads;
   private final UserRepository users;
   private final DealRepository deals;
@@ -75,6 +87,7 @@ public class LeadService {
     gates.require(me, Feature.UNLIMITED_LEADS);
     Lead l = new Lead();
     l.setCreatedBy(me);
+    l.setCompanyId(me.getCompanyId());
     apply(l, r);
     if (me.getRole() == Role.AGENT) {
       l.setAssignedTo(new UUID[] {me.getId()});
@@ -82,7 +95,14 @@ public class LeadService {
       l.setAssignedTo(new UUID[] {leastLoadedActiveAgent()});
     }
     l = leads.save(l);
+    Deal deal = createProspectingDeal(l, me);
     activity.log(me.getId(), ActivityType.LEAD_STATUS_CHANGED, "LEAD", l.getId(), "Created lead");
+    activity.log(
+        me.getId(),
+        ActivityType.LEAD_STAGE_CHANGED,
+        "DEAL",
+        deal.getId(),
+        "Created prospecting deal for new lead");
     return mapper.lead(l);
   }
 
@@ -140,18 +160,14 @@ public class LeadService {
   public DealResponse convert(UUID id, LeadConvertRequest req) {
     Lead l = find(id);
     checkOwn(l);
-    if (l.getStatus() == LeadStatus.CONVERTED)
-      throw new IllegalArgumentException("Lead is already converted");
     User me = current.get();
-    Deal d = new Deal();
-    d.setLead(l);
-    d.setCreatedBy(me);
+    Deal d = deals.findByLeadId(l.getId()).orElseGet(() -> createProspectingDeal(l, me));
     d.setTitle(
         req != null && req.title() != null
             ? req.title()
             : ((l.getCompanyName() != null ? l.getCompanyName() : l.getFirstName())
                 + " opportunity"));
-    d.setStage(DealStage.PROSPECTING);
+    if (d.getStage() == null) d.setStage(DealStage.PROSPECTING);
     d.setPriority(req == null ? l.getPriority() : req.priority());
     if (me.getRole() == Role.AGENT) d.setAssignedTo(me);
     else if (req != null && req.assignedToId() != null)
@@ -281,8 +297,9 @@ public class LeadService {
     l.setCompanyName(r.getCompanyName());
     l.setRole(r.getRole());
     l.setAddress(r.getAddress());
-    l.setIndustry(r.getIndustry());
-    l.setCategory(r.getCategory() != null ? r.getCategory() : r.getIndustry());
+    String category = canonicalCategory(r);
+    l.setCategory(category);
+    l.setIndustry(category);
     l.setLeadSource(r.getLeadSource());
     l.setPriority(r.getPriority());
     if (r.getStatus() != null) l.setStatus(r.getStatus());
@@ -305,5 +322,42 @@ public class LeadService {
         && (r.getEmail() == null || r.getEmail().isBlank()))
       throw new IllegalArgumentException(
           "An email address is required when email communication or the newsletter is selected");
+  }
+
+  private String canonicalCategory(LeadRequest request) {
+    String category = normalize(request.getCategory());
+    String industry = normalize(request.getIndustry());
+    if (category != null && industry != null && !category.equals(industry))
+      throw new IllegalArgumentException("category and the legacy industry alias must match");
+    String value = category != null ? category : industry;
+    if (value != null && !CATEGORIES.contains(value))
+      throw new IllegalArgumentException("category must be one of: " + String.join(", ", CATEGORIES));
+    return value;
+  }
+
+  private String normalize(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
+  }
+
+  private Deal createProspectingDeal(Lead lead, User actor) {
+    Deal deal = new Deal();
+    deal.setCompanyId(lead.getCompanyId());
+    deal.setLead(lead);
+    deal.setCreatedBy(actor);
+    deal.setTitle(
+        (lead.getCompanyName() != null && !lead.getCompanyName().isBlank()
+                ? lead.getCompanyName()
+                : Optional.ofNullable(lead.getFirstName()).orElse("Lead"))
+            + " opportunity");
+    deal.setStage(DealStage.PROSPECTING);
+    deal.setPriority(lead.getPriority());
+    UUID[] assignees = lead.getAssignedTo();
+    if (assignees != null && assignees.length > 0)
+      deal.setAssignedTo(
+          users
+              .findById(assignees[0])
+              .orElseThrow(() -> new ResourceNotFoundException("Assignee")));
+    else deal.setAssignedTo(actor);
+    return deals.save(deal);
   }
 }

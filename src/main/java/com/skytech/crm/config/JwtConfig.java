@@ -9,4 +9,4 @@ import org.springframework.validation.annotation.Validated;
 public record JwtConfig(
     @NotBlank @Size(min = 32) String secret,
     @Positive long accessTokenExpiryMs,
-    @Positive long refreshTokenExpiryMs) {}
+    @Min(604800000) @Max(604800000) long refreshTokenExpiryMs) {}
