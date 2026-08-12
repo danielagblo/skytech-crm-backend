@@ -145,4 +145,19 @@ class DatabaseContractTest {
         .contains("payment_overdue")
         .contains("payment_recovery");
   }
+
+  @Test
+  void legacyTenantMigrationMakesExistingAccountsUsableByTenantScopedFeatures() throws Exception {
+    String migration;
+    try (var stream =
+        getClass()
+            .getResourceAsStream("/db/migration/V15__backfill_legacy_tenant_ids.sql")) {
+      assertThat(stream).isNotNull();
+      migration = new String(stream.readAllBytes(), StandardCharsets.UTF_8).toLowerCase();
+    }
+    assertThat(migration)
+        .contains("update users set company_id = legacy_company_id where company_id is null")
+        .contains("update settings set company_id = legacy_company_id where company_id is null")
+        .contains("alter table users alter column company_id set not null");
+  }
 }

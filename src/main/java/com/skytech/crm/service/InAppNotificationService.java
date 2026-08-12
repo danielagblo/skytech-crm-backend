@@ -120,7 +120,11 @@ public class InAppNotificationService {
   }
 
   private void create(User user, String type, String title, String body, String href, String key) {
-    if (key != null && notifications.existsByUserIdAndDeduplicationKey(user.getId(), key)) return;
+    if (key != null) {
+      notifications.insertIfAbsent(
+          user.getCompanyId(), user.getId(), type, title, body, href, key);
+      return;
+    }
     InAppNotification item = new InAppNotification();
     item.setCompanyId(user.getCompanyId());
     item.setUser(user);

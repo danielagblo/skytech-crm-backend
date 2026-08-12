@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.skytech.crm.dto.response.DepartmentAchievementResponse;
+import com.skytech.crm.dto.request.DepartmentTargetRequest;
 import com.skytech.crm.entity.*;
 import com.skytech.crm.enums.*;
 import com.skytech.crm.repository.*;
@@ -121,6 +122,22 @@ class DepartmentTargetServiceTest {
     assertEquals(1, result.metrics().size());
     assertEquals("DEALS_CLOSED", result.metrics().get(0).metric().name());
     assertEquals(33.33, result.overallPct(), 0.01);
+  }
+
+  @Test
+  void saveUsesConflictSafeTenantScopedUpserts() {
+    var request =
+        new DepartmentTargetRequest(
+            List.of(
+                new DepartmentTargetRequest.TargetInput(
+                    TargetMetric.CALLS, new BigDecimal("125"), true),
+                new DepartmentTargetRequest.TargetInput(
+                    TargetMetric.REVENUE, new BigDecimal("5000"), false)));
+
+    service.save("2026-08", request);
+
+    verify(targets).upsert(companyId, "2026-08", "CALLS", new BigDecimal("125"), true);
+    verify(targets).upsert(companyId, "2026-08", "REVENUE", new BigDecimal("5000"), false);
   }
 
   private double pct(DepartmentAchievementResponse result, String metric) {
