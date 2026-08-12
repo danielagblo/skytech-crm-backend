@@ -41,7 +41,8 @@ public record DashboardOverviewResponse(
   public record AgentRank(
       int rank,
       long totalAgents,
-      long screenTime,
+      long loggedCallSeconds,
+      long activeSessionSeconds,
       double targetAchievement,
       BigDecimal salesRevenue) {}
 }

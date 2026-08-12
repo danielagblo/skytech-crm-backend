@@ -83,6 +83,7 @@ class AuthServiceTest {
     private final ActivityService activity = mock(ActivityService.class);
     private final CrmMapper mapper = mock(CrmMapper.class);
     private final CurrentUserService current = mock(CurrentUserService.class);
+    private final UserSessionService sessions = mock(UserSessionService.class);
     private final UserResponse responseUser = mock(UserResponse.class);
     private final User user = new User();
     private final AuthService service;
@@ -106,7 +107,8 @@ class AuthServiceTest {
               activity,
               mapper,
               current,
-              new AuthenticationConfig(otpEnabled));
+              new AuthenticationConfig(otpEnabled),
+              sessions);
     }
   }
 }

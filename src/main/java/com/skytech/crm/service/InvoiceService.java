@@ -35,6 +35,7 @@ public class InvoiceService {
   private final ApplicationEventPublisher events;
   private final InvoiceConfig config;
   private final CalendarSyncService calendar;
+  private final AutomationJobService automationJobs;
 
   @Transactional(readOnly = true)
   public Page<InvoiceResponse> list(
@@ -126,6 +127,10 @@ public class InvoiceService {
     invoice.setIssuedAt(OffsetDateTime.now());
     invoice.setStatus(InvoiceStatus.ISSUED);
     invoice = invoices.save(invoice);
+    OffsetDateTime dueAt = invoice.getDueDate().atTime(7, 0).atOffset(ZoneOffset.UTC);
+    automationJobs.schedule(AutomationType.PAYMENT_DUE, invoice.getDeal(), dueAt);
+    automationJobs.schedule(AutomationType.PAYMENT_OVERDUE, invoice.getDeal(), dueAt.plusDays(1));
+    automationJobs.schedule(AutomationType.PAYMENT_RECOVERY, invoice.getDeal(), dueAt.plusDays(7));
     calendar.syncInvoice(invoice);
     activity.log(
         current.id(),
@@ -242,6 +247,7 @@ public class InvoiceService {
     if (invoice.getBalanceDue().signum() == 0) {
       invoice.setStatus(InvoiceStatus.PAID);
       invoice.setPaidAt(payment.getPaidAt());
+      automationJobs.cancelPaymentReminders(invoice.getDeal().getId());
     } else {
       invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
     }

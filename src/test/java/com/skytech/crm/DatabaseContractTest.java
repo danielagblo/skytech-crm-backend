@@ -114,4 +114,35 @@ class DatabaseContractTest {
         .contains("add column failure_reason")
         .contains("add column failure_details");
   }
+
+  @Test
+  void presenceAssignmentAndDelayedAutomationMigrationMatchesApiContract() throws Exception {
+    String migration;
+    try (var stream =
+        getClass()
+            .getResourceAsStream(
+                "/db/migration/V14__presence_sessions_assignment_and_automation_jobs.sql")) {
+      assertThat(stream).isNotNull();
+      migration = new String(stream.readAllBytes(), StandardCharsets.UTF_8).toLowerCase();
+    }
+    assertThat(migration)
+        .contains("alter table users add column last_seen_at")
+        .contains("create table user_sessions")
+        .contains("started_at timestamptz not null")
+        .contains("last_activity_at timestamptz not null")
+        .contains("ended_at timestamptz")
+        .contains("alter table settings add column assignment_cursor")
+        .contains("create table automation_execution_jobs")
+        .contains("automation_id uuid not null")
+        .contains("lead_id uuid")
+        .contains("deal_id uuid")
+        .contains("step_index int not null")
+        .contains("scheduled_at timestamptz not null")
+        .contains("attempt_count int not null")
+        .contains("last_error text")
+        .contains("payment_received")
+        .contains("payment_due")
+        .contains("payment_overdue")
+        .contains("payment_recovery");
+  }
 }

@@ -9,7 +9,16 @@ import org.mapstruct.*;
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface CrmMapper {
   @Mapping(target = "active", source = "active")
+  @Mapping(
+      target = "presenceStatus",
+      expression = "java(presence(value.getLastSeenAt()))")
   UserResponse user(User value);
+
+  default com.skytech.crm.enums.PresenceStatus presence(java.time.OffsetDateTime lastSeenAt) {
+    return lastSeenAt != null && lastSeenAt.isAfter(java.time.OffsetDateTime.now().minusMinutes(2))
+        ? com.skytech.crm.enums.PresenceStatus.ONLINE
+        : com.skytech.crm.enums.PresenceStatus.OFFLINE;
+  }
 
   @Mapping(target = "createdById", source = "createdBy.id")
   LeadResponse lead(Lead value);

@@ -21,8 +21,7 @@ class DealLogServiceTest {
   @Mock DealRepository deals;
   @Mock DealLogRepository logs;
   @Mock DealLogCommentRepository comments;
-  @Mock AutomationRepository automations;
-  @Mock AutomationExecutionService execution;
+  @Mock AutomationJobService automationJobs;
   @Mock CurrentUserService current;
   @Mock ActivityService activity;
   @Mock CrmMapper mapper;
@@ -51,8 +50,6 @@ class DealLogServiceTest {
               if (value.getId() == null) value.setId(logId);
               return value;
             });
-    when(automations.findByAutomationTypeAndIsActiveTrue(any())).thenReturn(List.of());
-
     service.create(dealId, payment("250"));
     assertThat(deal.getTotalPaid()).isEqualByComparingTo("350");
     assertThat(deal.getArrears()).isEqualByComparingTo("650");

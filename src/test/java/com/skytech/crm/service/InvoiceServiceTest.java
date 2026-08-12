@@ -32,6 +32,7 @@ class InvoiceServiceTest {
   @Mock ApplicationEventPublisher events;
   @Mock InvoiceConfig config;
   @Mock CalendarSyncService calendar;
+  @Mock AutomationJobService automationJobs;
   @InjectMocks InvoiceService service;
 
   @Test

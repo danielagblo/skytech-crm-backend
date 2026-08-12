@@ -22,7 +22,8 @@ class LeadServiceTest {
   @Mock LeadRepository leads;
   @Mock UserRepository users;
   @Mock DealRepository deals;
-  @Mock SettingRepository settings;
+  @Mock LeadAssignmentService assignments;
+  @Mock LeadConversionScoreService conversionScores;
   @Mock CurrentUserService current;
   @Mock FeatureGateService gates;
   @Mock ActivityService activity;
@@ -34,14 +35,8 @@ class LeadServiceTest {
     User manager = user(Role.MANAGER, OffsetDateTime.now().minusYears(1));
     User busyAgent = user(Role.AGENT, OffsetDateTime.now().minusMonths(2));
     User availableAgent = user(Role.AGENT, OffsetDateTime.now().minusMonths(1));
-    Setting setting = new Setting();
-    setting.setAutoAssignEnabled(true);
-
     when(current.get()).thenReturn(manager);
-    when(settings.findAll()).thenReturn(List.of(setting));
-    when(users.findAll()).thenReturn(List.of(manager, busyAgent, availableAgent));
-    when(leads.findAssigned(busyAgent.getId())).thenReturn(List.of(new Lead(), new Lead()));
-    when(leads.findAssigned(availableAgent.getId())).thenReturn(List.of());
+    when(assignments.selectIfEnabled()).thenReturn(Optional.of(availableAgent.getId()));
     when(users.findById(availableAgent.getId())).thenReturn(Optional.of(availableAgent));
     when(leads.save(any(Lead.class)))
         .thenAnswer(
@@ -76,9 +71,7 @@ class LeadServiceTest {
     User first = user(Role.AGENT, OffsetDateTime.now().minusMonths(2));
     User second = user(Role.AGENT, OffsetDateTime.now().minusMonths(1));
     when(current.get()).thenReturn(manager);
-    when(settings.findAll()).thenReturn(List.of());
-    when(users.existsById(first.getId())).thenReturn(true);
-    when(users.existsById(second.getId())).thenReturn(true);
+    when(users.findAllById(anyCollection())).thenReturn(List.of(first, second));
     when(users.findById(first.getId())).thenReturn(Optional.of(first));
     when(leads.save(any(Lead.class))).thenAnswer(invocation -> {
       Lead lead = invocation.getArgument(0);
@@ -103,6 +96,78 @@ class LeadServiceTest {
     assertThat(lead.getValue().getCategory()).isEqualTo("Tech");
     assertThat(lead.getValue().getIndustry()).isEqualTo("Tech");
     verify(deals, times(1)).save(any(Deal.class));
+    verify(assignments, never()).selectIfEnabled();
+  }
+
+  @Test
+  void agentCreationAlwaysAssignsTheAuthenticatedAgent() {
+    User agent = user(Role.AGENT, OffsetDateTime.now());
+    User requested = user(Role.AGENT, OffsetDateTime.now().minusDays(1));
+    when(current.get()).thenReturn(agent);
+    when(users.findById(agent.getId())).thenReturn(Optional.of(agent));
+    when(leads.save(any(Lead.class))).thenAnswer(invocation -> {
+      Lead lead = invocation.getArgument(0);
+      lead.setId(UUID.randomUUID());
+      return lead;
+    });
+    when(deals.save(any(Deal.class))).thenAnswer(invocation -> {
+      Deal deal = invocation.getArgument(0);
+      deal.setId(UUID.randomUUID());
+      return deal;
+    });
+
+    service.create(emptyLead().setAssignedTo(new UUID[] {requested.getId()}));
+
+    ArgumentCaptor<Lead> saved = ArgumentCaptor.forClass(Lead.class);
+    verify(leads).save(saved.capture());
+    assertThat(saved.getValue().getAssignedTo()).containsExactly(agent.getId());
+    verify(assignments, never()).selectIfEnabled();
+    verify(users, never()).findAllById(anyCollection());
+  }
+
+  @Test
+  void ignoresClientConversionScoreAndUsesServerCalculation() {
+    User manager = user(Role.MANAGER, OffsetDateTime.now());
+    when(current.get()).thenReturn(manager);
+    when(assignments.selectIfEnabled()).thenReturn(Optional.empty());
+    when(conversionScores.calculate(any(Lead.class))).thenReturn(35);
+    when(leads.save(any(Lead.class))).thenAnswer(invocation -> {
+      Lead lead = invocation.getArgument(0);
+      lead.setId(UUID.randomUUID());
+      return lead;
+    });
+    when(deals.save(any(Deal.class))).thenAnswer(invocation -> {
+      Deal deal = invocation.getArgument(0);
+      deal.setId(UUID.randomUUID());
+      return deal;
+    });
+
+    service.create(emptyLead().setConversionScore(100));
+
+    ArgumentCaptor<Lead> saved = ArgumentCaptor.forClass(Lead.class);
+    verify(leads).save(saved.capture());
+    assertThat(saved.getValue().getConversionScore()).isEqualTo(35);
+  }
+
+  @Test
+  void rejectsManualAssigneesThatAreNotActiveAgentsInTheTenant() {
+    UUID tenantId = UUID.randomUUID();
+    User manager = user(Role.MANAGER, OffsetDateTime.now());
+    manager.setCompanyId(tenantId);
+    User invalidAssignee = user(Role.MANAGER, OffsetDateTime.now());
+    invalidAssignee.setCompanyId(tenantId);
+    when(current.get()).thenReturn(manager);
+    when(users.findAllById(anyCollection())).thenReturn(List.of(invalidAssignee));
+
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    emptyLead().setAssignedTo(new UUID[] {invalidAssignee.getId()})))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("active agent");
+
+    verifyNoInteractions(deals);
+    verify(assignments, never()).selectIfEnabled();
   }
 
   @Test

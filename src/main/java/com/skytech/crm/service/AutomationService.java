@@ -32,7 +32,7 @@ public class AutomationService {
   @Transactional(readOnly = true)
   public Page<AutomationResponse> list(Pageable p) {
     gates.require(current.get(), Feature.AUTOMATION_BUILDER);
-    return automations.findAll(p).map(mapper::automation);
+    return automations.findTenant(current.get().getCompanyId(), p).map(mapper::automation);
   }
 
   @Transactional(readOnly = true)
@@ -45,7 +45,13 @@ public class AutomationService {
             new AutomationOptionsResponse.TypeOption(
                 AutomationType.PUBLIC_HOLIDAY, true, "DATE", List.of("date")),
             new AutomationOptionsResponse.TypeOption(
-                AutomationType.PAYMENT, true, "DEAL_PAYMENT_RECORDED", List.of()),
+                AutomationType.PAYMENT_RECEIVED, true, "DEAL_PAYMENT_RECORDED", List.of()),
+            new AutomationOptionsResponse.TypeOption(
+                AutomationType.PAYMENT_DUE, true, "INVOICE_DUE", List.of()),
+            new AutomationOptionsResponse.TypeOption(
+                AutomationType.PAYMENT_OVERDUE, true, "INVOICE_OVERDUE", List.of()),
+            new AutomationOptionsResponse.TypeOption(
+                AutomationType.PAYMENT_RECOVERY, true, "PAYMENT_RECOVERY", List.of()),
         new AutomationOptionsResponse.TypeOption(
           AutomationType.PERSONAL, true, "DATE", List.of("date", "contact_ids"))),
         List.of("SMS", "EMAIL", "BOTH"),
@@ -113,11 +119,16 @@ public class AutomationService {
   @Transactional(readOnly = true)
   public Page<AutomationResponse> type(AutomationType t, Pageable p) {
     gates.require(current.get(), Feature.AUTOMATION_BUILDER);
-    return automations.findByAutomationType(t, p).map(mapper::automation);
+    return automations.findTenantByType(current.get().getCompanyId(), t, p)
+        .map(mapper::automation);
   }
 
   private Automation find(UUID id) {
-    return automations.findById(id).orElseThrow(() -> new ResourceNotFoundException("Automation"));
+    Automation value = automations.findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("Automation"));
+    if (!Objects.equals(value.getCompanyId(), current.get().getCompanyId()))
+      throw new ResourceNotFoundException("Automation");
+    return value;
   }
 
   private void apply(Automation a, AutomationRequest r) {
@@ -180,6 +191,15 @@ public class AutomationService {
       Object message = step.containsKey("message") ? step.get("message") : step.get("body");
       if (message == null || String.valueOf(message).isBlank())
         throw new IllegalArgumentException("Automation step " + index + " requires a message");
+      Object wait = step.containsKey("wait_days") ? step.get("wait_days") : step.get("waitDays");
+      if (wait != null) {
+        try {
+          if (Long.parseLong(String.valueOf(wait)) < 0)
+            throw new IllegalArgumentException("Automation step " + index + " wait_days cannot be negative");
+        } catch (NumberFormatException exception) {
+          throw new IllegalArgumentException("Automation step " + index + " wait_days must be a whole number");
+        }
+      }
     }
   }
 
@@ -187,18 +207,6 @@ public class AutomationService {
     if (request.getAutomationType() != AutomationType.PERSONAL) return new UUID[0];
     LinkedHashSet<UUID> ids = new LinkedHashSet<>();
     if (request.getContactIds() != null) ids.addAll(Arrays.asList(request.getContactIds()));
-    Map<String, Object> trigger = request.getTriggerConfig();
-    if (trigger != null) {
-      Object legacy = trigger.containsKey("contactIds") ? trigger.get("contactIds") : trigger.get("contact_ids");
-      if (legacy instanceof Collection<?> values)
-        for (Object value : values) {
-          try {
-            ids.add(UUID.fromString(String.valueOf(value)));
-          } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("Invalid personal automation contact id: " + value);
-          }
-        }
-    }
     if (!ids.isEmpty()) {
       List<Lead> contacts = leads.findAllById(ids);
       if (contacts.size() != ids.size()) throw new ResourceNotFoundException("Automation contact");

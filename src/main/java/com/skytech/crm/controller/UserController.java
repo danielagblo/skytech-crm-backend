@@ -17,6 +17,11 @@ import org.springframework.web.multipart.MultipartFile;
 public class UserController extends BaseController {
   private final UserService users;
 
+  @PostMapping("/me/presence")
+  ApiResponse<?> heartbeat() {
+    return ok(users.heartbeat());
+  }
+
   @GetMapping
   ApiResponse<?> list(
       @RequestParam(required = false) String search, @PageableDefault(size = 20) Pageable p) {

@@ -44,7 +44,7 @@ public class AutomationController extends BaseController {
 
   @GetMapping("/payment-workflows")
   ApiResponse<?> payments(@PageableDefault(size = 20) Pageable p) {
-    return ok(automation.type(AutomationType.PAYMENT, p));
+    return ok(automation.type(AutomationType.PAYMENT_RECEIVED, p));
   }
 
   @GetMapping("/{id}")

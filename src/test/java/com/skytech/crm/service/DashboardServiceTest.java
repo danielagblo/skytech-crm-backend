@@ -51,7 +51,8 @@ class DashboardServiceTest {
         users,
         mock(RatingRepository.class),
         current,
-        mock(FeatureGateService.class));
+        mock(FeatureGateService.class),
+        mock(UserSessionService.class));
   }
 
   private User user(Role role, UUID companyId) {

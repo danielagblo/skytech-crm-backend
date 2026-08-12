@@ -19,8 +19,7 @@ public class DealLogService {
   private final DealRepository deals;
   private final DealLogRepository logs;
   private final DealLogCommentRepository comments;
-  private final AutomationRepository automations;
-  private final AutomationExecutionService execution;
+  private final AutomationJobService automationJobs;
   private final CurrentUserService current;
   private final ActivityService activity;
   private final CrmMapper mapper;
@@ -308,10 +307,9 @@ public class DealLogService {
   }
 
   private void triggerPayment(Deal deal, BigDecimal amount) {
-    for (Automation automation :
-        automations.findByAutomationTypeAndIsActiveTrue(
-            com.skytech.crm.enums.AutomationType.PAYMENT))
-      execution.execute(
-          automation, deal.getLead(), "Payment of " + amount + " received for " + deal.getTitle());
+    automationJobs.schedule(
+        com.skytech.crm.enums.AutomationType.PAYMENT_RECEIVED,
+        deal,
+        java.time.OffsetDateTime.now());
   }
 }

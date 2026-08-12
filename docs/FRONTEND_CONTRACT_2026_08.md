@@ -53,6 +53,19 @@ deal-create request. Deal responses now include `customer_first_name`, `customer
 `customer_email`, `customer_phone`, `customer_company`, `customer_address`, and
 `customer_category`; use these fields to prefill invoices.
 
+Lead assignment on create is authoritative on the backend:
+
+- An authenticated `AGENT` is always assigned to their own new lead; submitted assignees are ignored.
+- An administrator or manager may submit one or more active agent IDs from the same tenant, and
+  those selections are preserved.
+- Automatic assignment is considered only when an administrator or manager omits `assigned_to`
+  or submits an empty array.
+
+`conversion_score` is read-only. Any value supplied by a client is ignored. The current documented
+score model is `NEW=10`, `CONTACTED=35`, `QUALIFIED=65`, `CONVERTED=100`, and `LOST=0`, with
+15 additional points after a meeting is arranged for non-terminal leads. The backend clamps every
+calculated result to 0-100.
+
 ## Personal automations
 
 Create personal automations with top-level `contact_ids` and an exact ISO date:
@@ -113,7 +126,10 @@ Task status updates accept status, reason, or both:
 
 A reason-only request preserves the current status. The returned task exposes
 `completion_reason`; managers and administrators also receive an in-app notification when another
-user submits a reason.
+user submits a reason. Every task response contains `completion_reason` (it is `null` until a reason
+exists). `GET /api/v1/tasks?overdue=true` returns all tasks visible to the authenticated role whose
+`due_date` is in the past and whose status is anything other than `DONE`; it does not require the
+stored status to have already changed to `OVERDUE`.
 
 ## Invoices
 

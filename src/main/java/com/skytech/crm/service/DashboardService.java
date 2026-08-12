@@ -24,6 +24,7 @@ public class DashboardService {
   private final RatingRepository ratings;
   private final CurrentUserService current;
   private final FeatureGateService gates;
+  private final UserSessionService sessions;
 
   @Transactional(readOnly = true)
   public DashboardOverviewResponse overview(String period) {
@@ -126,13 +127,12 @@ public class DashboardService {
                 .toList());
     BigDecimal ownRevenue =
         visibleDeals.stream().map(this::paid).reduce(BigDecimal.ZERO, BigDecimal::add);
-    long screenTimeHours =
+    long loggedCallSeconds =
         visibleLogs.stream()
                 .map(DealLog::getCallDurationSeconds)
                 .filter(Objects::nonNull)
                 .mapToLong(Integer::longValue)
-                .sum()
-            / 3600;
+                .sum();
     BigDecimal contractTotal =
         visibleDeals.stream()
             .map(deal -> Optional.ofNullable(deal.getContractValue()).orElse(BigDecimal.ZERO))
@@ -148,7 +148,8 @@ public class DashboardService {
         new DashboardOverviewResponse.AgentRank(
             rankIn(board, me),
             board.size(),
-            screenTimeHours,
+            loggedCallSeconds,
+            sessions.activeSeconds(me.getCompanyId(), scopedUserId),
             targetAchievement,
             ownRevenue);
 

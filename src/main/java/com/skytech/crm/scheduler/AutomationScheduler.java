@@ -47,8 +47,9 @@ public class AutomationScheduler {
                         && MonthDay.from(x.getBirthday()).equals(MonthDay.from(today)))
             .toList())
       for (Automation a : flows)
-        execution.execute(
-            a, l, "Happy birthday " + Optional.ofNullable(l.getFirstName()).orElse(""));
+        if (Objects.equals(a.getCompanyId(), l.getCompanyId()))
+          execution.execute(
+              a, l, "Happy birthday " + Optional.ofNullable(l.getFirstName()).orElse(""));
   }
 
   @Scheduled(cron = "0 0 7 * * *", zone = "${app.time-zone:Africa/Accra}")
@@ -59,7 +60,9 @@ public class AutomationScheduler {
         automations.findByAutomationTypeAndIsActiveTrue(AutomationType.PUBLIC_HOLIDAY)) {
       Object date = a.getTriggerConfig() == null ? null : a.getTriggerConfig().get("date");
       if (today.equals(String.valueOf(date)))
-        for (Lead l : leads.findAll()) execution.execute(a, l, "Season's greetings from Skytech");
+        for (Lead l : leads.findAll())
+          if (Objects.equals(a.getCompanyId(), l.getCompanyId()))
+            execution.execute(a, l, "Season's greetings from Skytech");
     }
   }
 
