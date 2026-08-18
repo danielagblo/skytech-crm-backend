@@ -10,6 +10,7 @@ import com.skytech.crm.enums.Role;
 import com.skytech.crm.mapper.CrmMapper;
 import com.skytech.crm.repository.*;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -119,6 +120,59 @@ class DealLogServiceTest {
     verify(deals, never()).save(deal);
   }
 
+  @Test
+  void retentionLogsPersistEachServiceExpiryAndCostOnTheDeal() {
+    UUID dealId = UUID.randomUUID();
+    User admin = new User();
+    admin.setId(UUID.randomUUID());
+    admin.setRole(Role.ADMIN);
+    Deal deal = new Deal();
+    deal.setId(dealId);
+    when(current.get()).thenReturn(admin);
+    when(current.id()).thenReturn(admin.getId());
+    when(deals.findById(dealId)).thenReturn(Optional.of(deal));
+    when(logs.save(any(DealLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    LocalDate domainExpiry = LocalDate.of(2027, 1, 10);
+    LocalDate hostingExpiry = LocalDate.of(2027, 2, 11);
+    LocalDate maintenanceExpiry = LocalDate.of(2027, 3, 12);
+    service.create(dealId, retention("DOMAIN", domainExpiry, "120"));
+    service.create(dealId, retention("HOSTING", hostingExpiry, "240"));
+    service.create(dealId, retention("MAINTENANCE", maintenanceExpiry, "360"));
+
+    assertThat(deal.getDomainExpiry()).isEqualTo(domainExpiry);
+    assertThat(deal.getDomainCost()).isEqualByComparingTo("120");
+    assertThat(deal.getHostingExpiry()).isEqualTo(hostingExpiry);
+    assertThat(deal.getHostingCost()).isEqualByComparingTo("240");
+    assertThat(deal.getMaintenanceExpiry()).isEqualTo(maintenanceExpiry);
+    assertThat(deal.getMaintenanceCost()).isEqualByComparingTo("360");
+    verify(deals, times(3)).save(deal);
+  }
+
+  @Test
+  void rejectsIncompleteRetentionServiceDetails() {
+    UUID dealId = UUID.randomUUID();
+    User admin = new User();
+    admin.setId(UUID.randomUUID());
+    admin.setRole(Role.ADMIN);
+    Deal deal = new Deal();
+    deal.setId(dealId);
+    when(current.get()).thenReturn(admin);
+    when(deals.findById(dealId)).thenReturn(Optional.of(deal));
+
+    DealLogRequest missingCostAndReferences =
+        new CreateDealLogRequest()
+            .setLogType("CLIENT_RETENTION")
+            .setServiceType("DOMAIN")
+            .setExpiryDate(LocalDate.of(2027, 1, 10));
+
+    assertThatThrownBy(() -> service.create(dealId, missingCostAndReferences))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("retentionAmount");
+    verify(logs, never()).save(any());
+    verify(deals, never()).save(any());
+  }
+
   private DealLogRequest payment(String amount) {
     return new CreateDealLogRequest()
         .setLogType("PAYMENT")
@@ -129,5 +183,16 @@ class DealLogServiceTest {
         .setReceiptNumber("REC-1")
         .setInvoiceIssued(true)
         .setBody("Payment received");
+  }
+
+  private DealLogRequest retention(String serviceType, LocalDate expiry, String amount) {
+    return new CreateDealLogRequest()
+        .setLogType("CLIENT_RETENTION")
+        .setServiceType(serviceType)
+        .setExpiryDate(expiry)
+        .setRetentionAmount(new BigDecimal(amount))
+        .setRetentionInvoice("INV-RET-1")
+        .setRetentionReceipt("REC-RET-1")
+        .setBody("Service renewed");
   }
 }
