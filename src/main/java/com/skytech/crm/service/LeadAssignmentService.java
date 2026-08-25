@@ -37,7 +37,12 @@ public class LeadAssignmentService {
 
   @Transactional
   public Optional<UUID> selectIfEnabled() {
-    Setting setting = findSetting();
+    return selectIfEnabled(current.get().getCompanyId());
+  }
+
+  @Transactional
+  public Optional<UUID> selectIfEnabled(UUID companyId) {
+    Setting setting = findSetting(companyId);
     return setting.isAutoAssignEnabled() ? Optional.of(select(setting)) : Optional.empty();
   }
 
@@ -47,7 +52,7 @@ public class LeadAssignmentService {
   }
 
   private UUID select(Setting setting) {
-    UUID companyId = current.get().getCompanyId();
+    UUID companyId = setting.getCompanyId();
     List<User> candidates = users.lockAssignmentCandidates(companyId, Role.AGENT);
     if (candidates.isEmpty()) throw new IllegalArgumentException("No active agents available");
     String strategy = strategy(setting.getLeadAssignmentConfig());
@@ -64,7 +69,10 @@ public class LeadAssignmentService {
   }
 
   private Setting findSetting() {
-    UUID companyId = current.get().getCompanyId();
+    return findSetting(current.get().getCompanyId());
+  }
+
+  private Setting findSetting(UUID companyId) {
     return settings.findTenant(companyId).orElseGet(() -> {
       Setting created = new Setting();
       created.setCompanyId(companyId);

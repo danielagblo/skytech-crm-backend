@@ -12,6 +12,9 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 
   boolean existsByEmailIgnoreCase(String email);
 
+  @Query("select distinct u.companyId from User u where u.companyId is not null and u.isActive = true")
+  List<UUID> findActiveCompanyIds();
+
   @Query("select u from User u where ((u.companyId = :companyId) or "
       + "(u.companyId is null and :companyId is null)) and u.role = :role and u.isActive = true "
       + "order by u.createdAt asc, u.id asc")

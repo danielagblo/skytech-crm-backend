@@ -4,6 +4,7 @@ import com.skytech.crm.security.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.*;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -37,7 +38,9 @@ public class SecurityConfig {
             e -> e.authenticationEntryPoint(securityErrors).accessDeniedHandler(securityErrors))
         .authorizeHttpRequests(
             a ->
-                a.requestMatchers(
+                a.requestMatchers(HttpMethod.POST, "/api/v1/public/landing-page-leads")
+                    .permitAll()
+                    .requestMatchers(
                         "/api/v1/auth/login",
                         "/api/v1/auth/verify-otp",
                         "/api/v1/auth/refresh",
