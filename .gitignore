@@ -4,3 +4,5 @@ target/
 .env
 *.iml
 uploads/
+migrate.ps1
+migrate.sh
