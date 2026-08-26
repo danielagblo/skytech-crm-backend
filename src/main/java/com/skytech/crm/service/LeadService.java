@@ -20,10 +20,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class LeadService {
+  private static final Set<String> CATEGORIES =
+      Set.of(
+          "Hospitality",
+          "Retail & E-commerce",
+          "Education",
+          "Tourism & Logistics",
+          "Real estate & construction",
+          "Healthcare",
+          "Tech",
+          "NGO",
+          "Religion",
+          "Other");
   private final LeadRepository leads;
   private final UserRepository users;
   private final DealRepository deals;
-  private final SettingRepository settings;
+  private final LeadAssignmentService assignments;
+  private final LeadConversionScoreService conversionScores;
   private final CurrentUserService current;
   private final FeatureGateService gates;
   private final ActivityService activity;
@@ -75,14 +88,25 @@ public class LeadService {
     gates.require(me, Feature.UNLIMITED_LEADS);
     Lead l = new Lead();
     l.setCreatedBy(me);
-    apply(l, r);
+    l.setCompanyId(me.getCompanyId());
+    apply(l, r, me.getRole() != Role.AGENT);
     if (me.getRole() == Role.AGENT) {
       l.setAssignedTo(new UUID[] {me.getId()});
-    } else if (isAutoAssignEnabled()) {
-      l.setAssignedTo(new UUID[] {leastLoadedActiveAgent()});
+    } else if (l.getAssignedTo() == null || l.getAssignedTo().length == 0) {
+      Optional<UUID> automaticAssignee = assignments.selectIfEnabled();
+      if (automaticAssignee.isPresent())
+        l.setAssignedTo(new UUID[] {automaticAssignee.get()});
     }
+    l.setConversionScore(conversionScores.calculate(l));
     l = leads.save(l);
+    Deal deal = createProspectingDeal(l, me);
     activity.log(me.getId(), ActivityType.LEAD_STATUS_CHANGED, "LEAD", l.getId(), "Created lead");
+    activity.log(
+        me.getId(),
+        ActivityType.LEAD_STAGE_CHANGED,
+        "DEAL",
+        deal.getId(),
+        "Created prospecting deal for new lead");
     return mapper.lead(l);
   }
 
@@ -99,8 +123,9 @@ public class LeadService {
     checkOwn(l);
     UUID[] original = l.getAssignedTo();
     LeadStatus old = l.getStatus();
-    apply(l, r);
+    apply(l, r, current.get().getRole() != Role.AGENT);
     if (current.get().getRole() == Role.AGENT) l.setAssignedTo(original);
+    l.setConversionScore(conversionScores.calculate(l));
     l = leads.save(l);
     activity.log(
         current.id(),
@@ -140,18 +165,14 @@ public class LeadService {
   public DealResponse convert(UUID id, LeadConvertRequest req) {
     Lead l = find(id);
     checkOwn(l);
-    if (l.getStatus() == LeadStatus.CONVERTED)
-      throw new IllegalArgumentException("Lead is already converted");
     User me = current.get();
-    Deal d = new Deal();
-    d.setLead(l);
-    d.setCreatedBy(me);
+    Deal d = deals.findByLeadId(l.getId()).orElseGet(() -> createProspectingDeal(l, me));
     d.setTitle(
         req != null && req.title() != null
             ? req.title()
             : ((l.getCompanyName() != null ? l.getCompanyName() : l.getFirstName())
                 + " opportunity"));
-    d.setStage(DealStage.PROSPECTING);
+    if (d.getStage() == null) d.setStage(DealStage.PROSPECTING);
     d.setPriority(req == null ? l.getPriority() : req.priority());
     if (me.getRole() == Role.AGENT) d.setAssignedTo(me);
     else if (req != null && req.assignedToId() != null)
@@ -163,6 +184,7 @@ public class LeadService {
     if (req != null) d.setContractValue(req.contractValue());
     d = deals.save(d);
     l.setStatus(LeadStatus.CONVERTED);
+    l.setConversionScore(conversionScores.calculate(l));
     leads.save(l);
     activity.log(me.getId(), ActivityType.LEAD_STATUS_CHANGED, "LEAD", l.getId(), "Converted lead");
     activity.log(
@@ -179,7 +201,7 @@ public class LeadService {
   public LeadResponse assign(UUID id, UUID[] ids, boolean auto) {
     Lead l = find(id);
     if (auto) {
-      l.setAssignedTo(new UUID[] {leastLoadedActiveAgent()});
+      l.setAssignedTo(new UUID[] {assignments.selectAgent()});
     } else {
       if (ids != null)
         for (UUID uid : ids)
@@ -194,68 +216,17 @@ public class LeadService {
   @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
   @Transactional(readOnly = true)
   public LeadAssignmentConfigResponse autoConfig() {
-    return settings.findAll().stream()
-        .findFirst()
-        .map(
-            s ->
-                new LeadAssignmentConfigResponse(
-                    s.isAutoAssignEnabled(),
-                    s.getLeadAssignmentConfig() == null ? Map.of() : s.getLeadAssignmentConfig()))
-        .orElse(new LeadAssignmentConfigResponse(false, Map.of()));
+    return assignments.get();
   }
 
   @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
   @Transactional
   public LeadAssignmentConfigResponse autoConfig(LeadAssignmentConfigRequest request) {
-    Setting s = settings.findAll().stream().findFirst().orElseGet(Setting::new);
-    s.setAutoAssignEnabled(request.enabled());
-    s.setLeadAssignmentConfig(request.config() == null ? Map.of() : request.config());
-    settings.save(s);
-    activity.log(
-        current.id(),
-        ActivityType.LEAD_STAGE_CHANGED,
-        "SYSTEM",
-        s.getId(),
-        "Updated auto assignment config");
-    return new LeadAssignmentConfigResponse(s.isAutoAssignEnabled(), s.getLeadAssignmentConfig());
+    return assignments.update(request);
   }
 
   private Lead find(UUID id) {
     return leads.findById(id).orElseThrow(() -> new ResourceNotFoundException("Lead"));
-  }
-
-  private boolean isAutoAssignEnabled() {
-    return settings.findAll().stream().findFirst().map(Setting::isAutoAssignEnabled).orElse(false);
-  }
-
-  // this version assigns to agents currently online ONLY, 
-  // but we don't have a way to track online agents yet, 
-  // so we will use the least loaded agent for now
-  //
-  // private UUID leastLoadedActiveAgent() {
-  //   return users.findAll().stream()
-  //       .filter(user -> user.getRole() == Role.AGENT && user.isActive())
-  //       .min(
-  //           Comparator.<User>comparingInt(user -> leads.findAssigned(user.getId()).size())
-  //               .thenComparing(User::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
-  //       .map(User::getId)
-  //       .orElseThrow(() -> new IllegalArgumentException("No active agents available"));
-  // }
-
-
-  // this version assigns to the least loaded agent, regardless of whether they are online or not
-  private UUID leastLoadedActiveAgent() {
-    return users.findAll().stream()
-        .filter(user -> user.getRole() == Role.AGENT && user.isActive())
-        .min(
-            Comparator.<User>comparingInt(user -> leads.findAssigned(user.getId()).size())
-                .thenComparing(
-                    User::getCreatedAt,
-                    Comparator.nullsLast(Comparator.naturalOrder())
-                )
-        )
-        .map(User::getId)
-        .orElseThrow(() -> new IllegalArgumentException("No active agents available"));
   }
 
   private void checkOwn(Lead l) {
@@ -266,12 +237,12 @@ public class LeadService {
       throw new ForbiddenException("Lead is not assigned to you");
   }
 
-  private void apply(Lead l, LeadRequest r) {
+  private void apply(Lead l, LeadRequest r, boolean allowAssignments) {
     validateCommunicationPreferences(r);
-    if (r.getAssignedTo() != null)
-      for (UUID id : r.getAssignedTo())
-        if (!users.existsById(id)) throw new ResourceNotFoundException("Assignee");
-    l.setAssignedTo(r.getAssignedTo());
+    if (allowAssignments) {
+      validateAssignees(r.getAssignedTo());
+      l.setAssignedTo(r.getAssignedTo());
+    }
     l.setFirstName(r.getFirstName());
     l.setLastName(r.getLastName());
     l.setEmail(r.getEmail());
@@ -281,8 +252,9 @@ public class LeadService {
     l.setCompanyName(r.getCompanyName());
     l.setRole(r.getRole());
     l.setAddress(r.getAddress());
-    l.setIndustry(r.getIndustry());
-    l.setCategory(r.getCategory() != null ? r.getCategory() : r.getIndustry());
+    String category = canonicalCategory(r);
+    l.setCategory(category);
+    l.setIndustry(category);
     l.setLeadSource(r.getLeadSource());
     l.setPriority(r.getPriority());
     if (r.getStatus() != null) l.setStatus(r.getStatus());
@@ -294,7 +266,25 @@ public class LeadService {
     if (r.getEmailOptIn() != null) l.setEmailOptIn(r.getEmailOptIn());
     if (r.getNewsletterOptIn() != null) l.setNewsletterOptIn(r.getNewsletterOptIn());
     l.setDescription(r.getDescription());
-    if (r.getConversionScore() != null) l.setConversionScore(r.getConversionScore());
+  }
+
+  private void validateAssignees(UUID[] ids) {
+    if (ids == null || ids.length == 0) return;
+    UUID companyId = current.get().getCompanyId();
+    Set<UUID> requested = new LinkedHashSet<>(Arrays.asList(ids));
+    if (requested.contains(null) || requested.size() != ids.length)
+      throw new IllegalArgumentException("assignedTo must contain unique agent IDs");
+    Map<UUID, User> found = new HashMap<>();
+    users.findAllById(requested).forEach(user -> found.put(user.getId(), user));
+    for (UUID id : requested) {
+      User user = found.get(id);
+      if (user == null) throw new ResourceNotFoundException("Assignee");
+      if (user.getRole() != Role.AGENT
+          || !user.isActive()
+          || !Objects.equals(user.getCompanyId(), companyId))
+        throw new IllegalArgumentException(
+            "Every assignedTo entry must be an active agent in the current tenant");
+    }
   }
 
   private void validateCommunicationPreferences(LeadRequest r) {
@@ -305,5 +295,42 @@ public class LeadService {
         && (r.getEmail() == null || r.getEmail().isBlank()))
       throw new IllegalArgumentException(
           "An email address is required when email communication or the newsletter is selected");
+  }
+
+  private String canonicalCategory(LeadRequest request) {
+    String category = normalize(request.getCategory());
+    String industry = normalize(request.getIndustry());
+    if (category != null && industry != null && !category.equals(industry))
+      throw new IllegalArgumentException("category and the legacy industry alias must match");
+    String value = category != null ? category : industry;
+    if (value != null && !CATEGORIES.contains(value))
+      throw new IllegalArgumentException("category must be one of: " + String.join(", ", CATEGORIES));
+    return value;
+  }
+
+  private String normalize(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
+  }
+
+  private Deal createProspectingDeal(Lead lead, User actor) {
+    Deal deal = new Deal();
+    deal.setCompanyId(lead.getCompanyId());
+    deal.setLead(lead);
+    deal.setCreatedBy(actor);
+    deal.setTitle(
+        (lead.getCompanyName() != null && !lead.getCompanyName().isBlank()
+                ? lead.getCompanyName()
+                : Optional.ofNullable(lead.getFirstName()).orElse("Lead"))
+            + " opportunity");
+    deal.setStage(DealStage.PROSPECTING);
+    deal.setPriority(lead.getPriority());
+    UUID[] assignees = lead.getAssignedTo();
+    if (assignees != null && assignees.length > 0)
+      deal.setAssignedTo(
+          users
+              .findById(assignees[0])
+              .orElseThrow(() -> new ResourceNotFoundException("Assignee")));
+    else deal.setAssignedTo(actor);
+    return deals.save(deal);
   }
 }

@@ -20,6 +20,7 @@ public class AutomationRequest {
   private String name;
 
   private Boolean active;
+  private UUID[] contactIds;
   private Map<String, Object> triggerConfig;
   private List<Map<String, Object>> steps;
 }

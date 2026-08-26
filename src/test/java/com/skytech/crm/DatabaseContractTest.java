@@ -87,4 +87,77 @@ class DatabaseContractTest {
         .contains("invoices_updated_at")
         .doesNotContain("serial", "bigserial");
   }
+
+  @Test
+  void contractHardeningMigrationsAddUniquenessAndExecutionState() throws Exception {
+    String leadMigration;
+    try (var stream =
+        getClass().getResourceAsStream("/db/migration/V12__lead_deal_contract.sql")) {
+      assertThat(stream).isNotNull();
+      leadMigration = new String(stream.readAllBytes(), StandardCharsets.UTF_8).toLowerCase();
+    }
+    String communicationMigration;
+    try (var stream =
+        getClass().getResourceAsStream(
+            "/db/migration/V13__automation_broadcast_execution.sql")) {
+      assertThat(stream).isNotNull();
+      communicationMigration =
+          new String(stream.readAllBytes(), StandardCharsets.UTF_8).toLowerCase();
+    }
+    assertThat(leadMigration)
+        .contains("create unique index uq_deals_lead_id")
+        .contains("check (category is null or category in");
+    assertThat(communicationMigration)
+        .contains("add column contact_ids uuid[]")
+        .contains("add column execution_state")
+        .contains("add column next_run_at")
+        .contains("add column failure_reason")
+        .contains("add column failure_details");
+  }
+
+  @Test
+  void presenceAssignmentAndDelayedAutomationMigrationMatchesApiContract() throws Exception {
+    String migration;
+    try (var stream =
+        getClass()
+            .getResourceAsStream(
+                "/db/migration/V14__presence_sessions_assignment_and_automation_jobs.sql")) {
+      assertThat(stream).isNotNull();
+      migration = new String(stream.readAllBytes(), StandardCharsets.UTF_8).toLowerCase();
+    }
+    assertThat(migration)
+        .contains("alter table users add column last_seen_at")
+        .contains("create table user_sessions")
+        .contains("started_at timestamptz not null")
+        .contains("last_activity_at timestamptz not null")
+        .contains("ended_at timestamptz")
+        .contains("alter table settings add column assignment_cursor")
+        .contains("create table automation_execution_jobs")
+        .contains("automation_id uuid not null")
+        .contains("lead_id uuid")
+        .contains("deal_id uuid")
+        .contains("step_index int not null")
+        .contains("scheduled_at timestamptz not null")
+        .contains("attempt_count int not null")
+        .contains("last_error text")
+        .contains("payment_received")
+        .contains("payment_due")
+        .contains("payment_overdue")
+        .contains("payment_recovery");
+  }
+
+  @Test
+  void legacyTenantMigrationMakesExistingAccountsUsableByTenantScopedFeatures() throws Exception {
+    String migration;
+    try (var stream =
+        getClass()
+            .getResourceAsStream("/db/migration/V15__backfill_legacy_tenant_ids.sql")) {
+      assertThat(stream).isNotNull();
+      migration = new String(stream.readAllBytes(), StandardCharsets.UTF_8).toLowerCase();
+    }
+    assertThat(migration)
+        .contains("update users set company_id = legacy_company_id where company_id is null")
+        .contains("update settings set company_id = legacy_company_id where company_id is null")
+        .contains("alter table users alter column company_id set not null");
+  }
 }

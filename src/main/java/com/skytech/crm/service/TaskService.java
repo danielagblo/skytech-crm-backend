@@ -28,6 +28,7 @@ public class TaskService {
   private final CalendarEventRepository calendarEvents;
   private final CurrentUserService current;
   private final ActivityService activity;
+  private final InAppNotificationService inAppNotifications;
   private final CrmMapper mapper;
   private static final String TASK_EVENT_TYPE = "TASK_DUE";
   private static final String TASK_EVENT_MARKER_PREFIX = "\n[TASK_ID=";
@@ -103,17 +104,27 @@ public class TaskService {
   @Transactional
   public TaskResponse status(UUID id, TaskStatus status, String reason) {
     Task t = find(id);
-    t.setStatus(status);
+    if (status == null && (reason == null || reason.isBlank()))
+      throw new IllegalArgumentException("Provide status, reason, or both");
+    if (status != null) t.setStatus(status);
     if (reason != null && !reason.isBlank()) t.setCompletionReason(reason.trim());
     if (status == TaskStatus.DONE && t.getCompletionReason() == null)
       t.setCompletionReason("Completed");
     tasks.save(t);
+    String description =
+        status == null
+            ? "Updated task reason: " + t.getCompletionReason()
+            : "Changed task status to "
+                + status
+                + (reason == null || reason.isBlank() ? "" : "; reason: " + reason.trim());
     activity.log(
         current.id(),
         status == TaskStatus.DONE ? ActivityType.TASK_APPROVED : ActivityType.TASK_STATUS_CHANGED,
         "TASK",
         id,
-        "Changed task status to " + status);
+        description);
+    if (reason != null && !reason.isBlank())
+      inAppNotifications.notifyTaskReason(t, current.get(), reason.trim());
     return mapper.task(t);
   }
 

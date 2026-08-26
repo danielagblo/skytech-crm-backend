@@ -44,6 +44,7 @@ public class User extends BaseEntity {
 
   private boolean isActive = true;
   private OffsetDateTime lastLogin;
+  private OffsetDateTime lastSeenAt;
 
   @Column(length = 10)
   private String otpCode;

@@ -102,6 +102,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(DataIntegrityViolationException.class)
   ResponseEntity<ErrorBody> conflict(DataIntegrityViolationException e) {
+    log.warn("Database constraint conflict: {}", rootMessage(e));
     return error(
         HttpStatus.CONFLICT, "DATA_CONFLICT", "The operation conflicts with existing data", null);
   }
@@ -164,6 +165,12 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(IllegalArgumentException.class)
   ResponseEntity<ErrorBody> bad(IllegalArgumentException e) {
     return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", e.getMessage(), null);
+  }
+
+  private String rootMessage(Throwable error) {
+    Throwable root = error;
+    while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+    return Optional.ofNullable(root.getMessage()).orElse(root.getClass().getSimpleName());
   }
 
   @ExceptionHandler(Exception.class)

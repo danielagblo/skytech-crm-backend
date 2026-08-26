@@ -30,18 +30,23 @@ public class UserService {
   private final CurrentUserService current;
   private final FeatureGateService gates;
   private final ActivityService activity;
+  private final UserSessionService sessions;
 
   @PreAuthorize("isAuthenticated()")
   @Transactional(readOnly = true)
   public Page<UserResponse> list(String search, Pageable p) {
+    UUID companyId = current.get().getCompanyId();
     Specification<User> s =
-        (r, q, b) ->
-            search == null || search.isBlank()
+        (r, q, b) -> {
+          var tenant = companyId == null ? b.isNull(r.get("companyId")) : b.equal(r.get("companyId"), companyId);
+          var searchPredicate = search == null || search.isBlank()
                 ? b.conjunction()
                 : b.or(
                     b.like(b.lower(r.get("firstName")), "%" + search.toLowerCase() + "%"),
                     b.like(b.lower(r.get("lastName")), "%" + search.toLowerCase() + "%"),
                     b.like(b.lower(r.get("email")), "%" + search.toLowerCase() + "%"));
+          return b.and(tenant, searchPredicate);
+        };
     return users.findAll(s, p).map(mapper::user);
   }
 
@@ -52,6 +57,7 @@ public class UserService {
     if (users.existsByEmailIgnoreCase(r.getEmail()))
       throw new org.springframework.dao.DataIntegrityViolationException("Email already exists");
     User u = new User();
+    u.setCompanyId(current.get().getCompanyId());
     apply(u, r, true);
     u = users.save(u);
     activity.log(
@@ -68,13 +74,13 @@ public class UserService {
     User me = current.get();
     if (me.getRole() == Role.AGENT && !me.getId().equals(id))
       throw new ForbiddenException("Agents may only view their own profile");
-    return mapper.user(find(id));
+    return mapper.user(findTenant(id, me));
   }
 
   @PreAuthorize("hasRole('ADMIN')")
   @Transactional
   public UserResponse update(UUID id, UserRequest r) {
-    User u = find(id);
+    User u = findTenant(id, current.get());
     apply(u, r, false);
     u = users.save(u);
     activity.log(current.id(), ActivityType.LEAD_STAGE_CHANGED, "SYSTEM", id, "Updated user");
@@ -84,7 +90,7 @@ public class UserService {
   @PreAuthorize("hasRole('ADMIN')")
   @Transactional
   public void delete(UUID id) {
-    User u = find(id);
+    User u = findTenant(id, current.get());
     if (current.id().equals(id))
       throw new IllegalArgumentException("You cannot delete your own account");
     u.setDeletedAt(java.time.OffsetDateTime.now());
@@ -116,7 +122,7 @@ public class UserService {
       Path target = dir.resolve(id + ext).normalize();
       if (!target.startsWith(dir)) throw new IllegalArgumentException("Invalid file name");
       file.transferTo(target);
-      User u = find(id);
+      User u = findTenant(id, me);
       u.setProfilePhotoUrl("/uploads/profiles/" + target.getFileName());
       users.save(u);
       activity.log(
@@ -132,7 +138,7 @@ public class UserService {
     User me = current.get();
     if (me.getRole() == Role.AGENT && !me.getId().equals(id))
       throw new ForbiddenException("Agents may only view their own performance");
-    find(id);
+    User target = findTenant(id, me);
     var owned = deals.findByAssignedToId(id);
     var closed = owned.stream().filter(d -> d.getStage() == DealStage.CLIENT_RETENTION).toList();
     var revenue =
@@ -149,8 +155,7 @@ public class UserService {
                     Optional.ofNullable(d.getTotalPaid()).orElse(java.math.BigDecimal.ZERO),
                     java.math.BigDecimal::add));
     List<java.math.BigDecimal> rankings =
-        users.findAll().stream()
-            .filter(u -> u.getRole() == Role.AGENT)
+        users.findAssignmentCandidates(target.getCompanyId(), Role.AGENT).stream()
             .map(
                 u ->
                     deals.findByAssignedToId(u.getId()).stream()
@@ -175,13 +180,19 @@ public class UserService {
                 .filter(Objects::nonNull)
                 .mapToLong(Integer::longValue)
                 .sum();
-    return new UserPerformanceResponse(rank, closed.size(), revenue, callSeconds / 3600, byMonth);
+    return new UserPerformanceResponse(
+        rank,
+        closed.size(),
+        revenue,
+        callSeconds,
+        sessions.activeSeconds(target.getCompanyId(), id),
+        byMonth);
   }
 
   @PreAuthorize("hasRole('ADMIN')")
   @Transactional
   public UserResponse role(UUID id, Role role) {
-    User u = find(id);
+    User u = findTenant(id, current.get());
     u.setRole(role);
     users.save(u);
     activity.log(
@@ -195,6 +206,22 @@ public class UserService {
 
   private User find(UUID id) {
     return users.findById(id).orElseThrow(() -> new ResourceNotFoundException("User"));
+  }
+
+  private User findTenant(UUID id, User actor) {
+    User value = find(id);
+    if (!Objects.equals(value.getCompanyId(), actor.getCompanyId()))
+      throw new ResourceNotFoundException("User");
+    return value;
+  }
+
+  @Transactional
+  public UserResponse heartbeat() {
+    User user = current.get();
+    user.setLastSeenAt(java.time.OffsetDateTime.now());
+    users.save(user);
+    sessions.heartbeat(user);
+    return mapper.user(user);
   }
 
   private void apply(User u, UserRequest r, boolean creating) {

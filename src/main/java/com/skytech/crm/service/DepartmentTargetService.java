@@ -49,18 +49,17 @@ public class DepartmentTargetService {
   public DepartmentTargetsResponse save(String period, DepartmentTargetRequest request) {
     String normalized = normalize(period);
     UUID companyId = current.get().getCompanyId();
+    if (companyId == null)
+      throw new IllegalStateException(
+          "The current account is not assigned to a company; apply the latest database migrations");
     for (DepartmentTargetRequest.TargetInput input : request.targets()) {
       if (input.metric() == null) throw new IllegalArgumentException("Metric is required");
-      DepartmentTarget row =
-          targets
-              .findByCompanyIdAndPeriodAndMetricType(companyId, normalized, input.metric())
-              .orElseGet(DepartmentTarget::new);
-      row.setCompanyId(companyId);
-      row.setPeriod(normalized);
-      row.setMetricType(input.metric());
-      row.setTargetValue(input.target());
-      row.setEnabled(input.enabled());
-      targets.save(row);
+      targets.upsert(
+          companyId,
+          normalized,
+          input.metric().name(),
+          input.target(),
+          input.enabled());
     }
     notifications.announceTargets(normalized, current.get());
     return getConfig(normalized);

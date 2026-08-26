@@ -17,4 +17,6 @@ public record UserResponse(
     String profilePhotoUrl,
     boolean active,
     OffsetDateTime lastLogin,
+    OffsetDateTime lastSeenAt,
+    PresenceStatus presenceStatus,
     OffsetDateTime createdAt) {}

@@ -1,7 +1,7 @@
 package com.skytech.crm;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -9,10 +9,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skytech.crm.dto.request.CreateUserRequest;
 import com.skytech.crm.dto.response.AuthResponse;
+import com.skytech.crm.dto.response.PublicLandingPageLeadResponse;
 import com.skytech.crm.entity.User;
-import com.skytech.crm.enums.Role;
+import com.skytech.crm.enums.*;
 import com.skytech.crm.security.CustomUserDetailsService;
 import com.skytech.crm.security.JwtTokenProvider;
+import com.skytech.crm.service.PublicLandingPageLeadService;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,6 +53,7 @@ class SkytechCrmApplicationTest {
   @Autowired MockMvc mockMvc;
   @Autowired JwtTokenProvider tokens;
   @MockitoBean CustomUserDetailsService userDetails;
+  @MockitoBean PublicLandingPageLeadService publicLandingPageLeads;
 
   @Test
   void contextLoads() {}
@@ -107,6 +110,33 @@ class SkytechCrmApplicationTest {
   }
 
   @Test
+  void landingPageLeadEndpointAcceptsCurrentCamelCasePayloadWithoutAuthentication()
+      throws Exception {
+    UUID leadId = UUID.randomUUID(), dealId = UUID.randomUUID();
+    when(publicLandingPageLeads.create(any()))
+        .thenReturn(new PublicLandingPageLeadResponse(leadId, dealId, DealStage.PROSPECTING));
+
+    mockMvc
+        .perform(
+            post("/api/v1/public/landing-page-leads")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"name":"Ama Mensah","phone":"+233201234567","email":"",
+                     "company":"","industry":"Tech","building":"Website + SEO",
+                     "projectType":"New Build","budget":"GH₵6,500","timeline":"",
+                     "urgency":"Very urgent","coupon":"","couponLabel":"",
+                     "referral":"Google","packageName":"Growth Website",
+                     "packagePrice":"GH₵6,500","source":"/forms","message":"Form summary"}
+                    """))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.success").value(true))
+        .andExpect(jsonPath("$.data.lead_id").value(leadId.toString()))
+        .andExpect(jsonPath("$.data.deal_id").value(dealId.toString()))
+        .andExpect(jsonPath("$.data.stage").value("PROSPECTING"));
+  }
+
+  @Test
   void validTokenForMissingUserIsRejectedWithTheApiEnvelope() throws Exception {
     User missing = new User();
     missing.setId(UUID.randomUUID());
@@ -143,6 +173,7 @@ class SkytechCrmApplicationTest {
             "POST /api/v1/auth/verify-otp",
             "POST /api/v1/auth/refresh",
             "POST /api/v1/auth/logout",
+            "POST /api/v1/public/landing-page-leads",
             "GET /api/v1/auth/me",
             "GET /api/v1/users",
             "POST /api/v1/users",

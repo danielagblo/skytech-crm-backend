@@ -11,6 +11,8 @@ public interface DealRepository extends JpaRepository<Deal, UUID>, JpaSpecificat
 
   List<Deal> findByAssignedToId(UUID id);
 
+  Optional<Deal> findByLeadId(UUID leadId);
+
   @Query(
       "select d from Deal d where d.hostingExpiry <= :to or d.domainExpiry <= :to or"
           + " d.maintenanceExpiry <= :to")

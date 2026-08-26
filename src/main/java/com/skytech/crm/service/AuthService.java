@@ -29,6 +29,7 @@ public class AuthService {
   private final CrmMapper mapper;
   private final CurrentUserService current;
   private final AuthenticationConfig authConfig;
+  private final UserSessionService sessions;
 
   @Transactional
   public AuthResponse.Login login(AuthRequests.Login req) {
@@ -62,7 +63,9 @@ public class AuthService {
     u.setOtpExpiresAt(null);
     u.setRefreshTokenHash(hash(refresh));
     u.setLastLogin(OffsetDateTime.now());
+    u.setLastSeenAt(OffsetDateTime.now());
     users.save(u);
+    sessions.start(u);
     activity.log(
         u.getId(), ActivityType.LEAD_STAGE_CHANGED, "SYSTEM", u.getId(), "Completed password login");
     return new AuthResponse.Login(false, u.getId(), access, refresh, mapper.user(u));
@@ -85,7 +88,9 @@ public class AuthService {
     u.setOtpExpiresAt(null);
     u.setRefreshTokenHash(hash(refresh));
     u.setLastLogin(OffsetDateTime.now());
+    u.setLastSeenAt(OffsetDateTime.now());
     users.save(u);
+    sessions.start(u);
     activity.log(
         u.getId(), ActivityType.LEAD_STAGE_CHANGED, "SYSTEM", u.getId(), "Completed OTP login");
     return new AuthResponse.Tokens(access, refresh, mapper.user(u));
@@ -111,6 +116,7 @@ public class AuthService {
   @Transactional
   public void logout() {
     User u = current.get();
+    sessions.end(u);
     u.setRefreshTokenHash(null);
     users.save(u);
     activity.log(u.getId(), ActivityType.LEAD_STAGE_CHANGED, "SYSTEM", u.getId(), "Logged out");

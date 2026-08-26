@@ -19,8 +19,7 @@ public class DealLogService {
   private final DealRepository deals;
   private final DealLogRepository logs;
   private final DealLogCommentRepository comments;
-  private final AutomationRepository automations;
-  private final AutomationExecutionService execution;
+  private final AutomationJobService automationJobs;
   private final CurrentUserService current;
   private final ActivityService activity;
   private final CrmMapper mapper;
@@ -257,6 +256,15 @@ public class DealLogService {
         if (request.getServiceType() == null || request.getExpiryDate() == null)
           throw new IllegalArgumentException(
               "Client retention logs require serviceType and expiryDate");
+        if (request.getRetentionAmount() == null || request.getRetentionAmount().signum() <= 0)
+          throw new IllegalArgumentException(
+              "Client retention logs require a positive retentionAmount");
+        if (request.getRetentionInvoice() == null
+            || request.getRetentionInvoice().isBlank()
+            || request.getRetentionReceipt() == null
+            || request.getRetentionReceipt().isBlank())
+          throw new IllegalArgumentException(
+              "Client retention logs require retentionInvoice and retentionReceipt");
       }
       default ->
           throw new IllegalArgumentException("Unsupported log type: " + request.getLogType());
@@ -298,9 +306,18 @@ public class DealLogService {
   private void applyRetention(Deal d, DealLog l) {
     if (l.getExpiryDate() == null || l.getServiceType() == null) return;
     switch (l.getServiceType()) {
-      case "HOSTING" -> d.setHostingExpiry(l.getExpiryDate());
-      case "DOMAIN" -> d.setDomainExpiry(l.getExpiryDate());
-      case "MAINTENANCE" -> d.setMaintenanceExpiry(l.getExpiryDate());
+      case "HOSTING" -> {
+        d.setHostingExpiry(l.getExpiryDate());
+        d.setHostingCost(l.getRetentionAmount());
+      }
+      case "DOMAIN" -> {
+        d.setDomainExpiry(l.getExpiryDate());
+        d.setDomainCost(l.getRetentionAmount());
+      }
+      case "MAINTENANCE" -> {
+        d.setMaintenanceExpiry(l.getExpiryDate());
+        d.setMaintenanceCost(l.getRetentionAmount());
+      }
       default ->
           throw new IllegalArgumentException("Unsupported service type: " + l.getServiceType());
     }
@@ -308,10 +325,9 @@ public class DealLogService {
   }
 
   private void triggerPayment(Deal deal, BigDecimal amount) {
-    for (Automation automation :
-        automations.findByAutomationTypeAndIsActiveTrue(
-            com.skytech.crm.enums.AutomationType.PAYMENT))
-      execution.execute(
-          automation, deal.getLead(), "Payment of " + amount + " received for " + deal.getTitle());
+    automationJobs.schedule(
+        com.skytech.crm.enums.AutomationType.PAYMENT_RECEIVED,
+        deal,
+        java.time.OffsetDateTime.now());
   }
 }

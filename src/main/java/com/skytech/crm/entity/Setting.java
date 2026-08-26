@@ -13,6 +13,7 @@ import org.hibernate.type.SqlTypes;
 @NoArgsConstructor
 public class Setting extends BaseEntity {
   private boolean autoAssignEnabled;
+  private long assignmentCursor;
 
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(columnDefinition = "jsonb")

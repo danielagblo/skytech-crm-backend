@@ -24,7 +24,8 @@ public class BroadcastService {
   private final DealRepository deals;
   private final CurrentUserService current;
   private final FeatureGateService gates;
-  private final NotificationService notifications;
+  private final SmsService sms;
+  private final EmailService email;
   private final ActivityService activity;
   private final CrmMapper mapper;
   private final CalendarSyncService calendar;
@@ -32,7 +33,7 @@ public class BroadcastService {
   @Transactional(readOnly = true)
   public Page<BroadcastResponse> list(Pageable p) {
     gates.require(current.get(), Feature.BULK_BROADCAST);
-    return broadcasts.findAll(p).map(mapper::broadcast);
+    return broadcasts.findByCompanyId(current.get().getCompanyId(), p).map(mapper::broadcast);
   }
 
   @Transactional
@@ -40,6 +41,7 @@ public class BroadcastService {
     gates.require(current.get(), Feature.BULK_BROADCAST);
     BroadcastMessage b = new BroadcastMessage();
     b.setCreatedBy(current.get());
+    b.setCompanyId(current.get().getCompanyId());
     apply(b, r);
     b.setStatus(r.getScheduledAt() == null ? BroadcastStatus.DRAFT : BroadcastStatus.WAITING);
     broadcasts.save(b);
@@ -106,6 +108,7 @@ public class BroadcastService {
         calendar.syncBroadcast(b);
       } catch (Exception exception) {
         b.setStatus(BroadcastStatus.FAILED);
+        b.setFailureDetails(safeFailure(exception));
         broadcasts.save(b);
         activity.log(
             null,
@@ -141,7 +144,8 @@ public class BroadcastService {
     if (days < 1 || days > 365)
       throw new IllegalArgumentException("days must be between 1 and 365");
     return broadcasts
-        .findByCreatedAtAfter(OffsetDateTime.now().minusDays(days), pageable)
+        .findByCompanyIdAndCreatedAtAfter(
+            current.get().getCompanyId(), OffsetDateTime.now().minusDays(days), pageable)
         .map(mapper::broadcast);
   }
 
@@ -152,48 +156,70 @@ public class BroadcastService {
       byStage.put(
           s,
           deals.findByStage(s).stream()
+              .filter(deal -> Objects.equals(deal.getCompanyId(), current.get().getCompanyId()))
               .map(Deal::getLead)
               .filter(Objects::nonNull)
               .map(Lead::getId)
               .distinct()
               .count());
-    return new ContactSegmentsResponse(leads.count(), byStage);
+    long total =
+        leads.findAll().stream()
+            .filter(lead -> Objects.equals(lead.getCompanyId(), current.get().getCompanyId()))
+            .count();
+    return new ContactSegmentsResponse(total, byStage);
   }
 
   private BroadcastMessage find(UUID id) {
-    return broadcasts.findById(id).orElseThrow(() -> new ResourceNotFoundException("Broadcast"));
+    BroadcastMessage broadcast =
+        broadcasts.findById(id).orElseThrow(() -> new ResourceNotFoundException("Broadcast"));
+    if (!Objects.equals(broadcast.getCompanyId(), current.get().getCompanyId()))
+      throw new ResourceNotFoundException("Broadcast");
+    return broadcast;
   }
 
   private BroadcastMessage dispatch(BroadcastMessage b, UUID actorId) {
     if (b.getStatus() == BroadcastStatus.SENT)
       throw new IllegalArgumentException("Broadcast has already been sent");
-    List<Lead> recipients = recipients(b.getSegmentFilter());
+    List<Lead> recipients = recipients(b);
     int count = 0;
+    List<String> failures = new ArrayList<>();
     for (Lead l : recipients) {
       if ("SMS".equals(b.getChannel())
           && l.isSmsOptIn()
           && l.getPhone1() != null
           && !l.getPhone1().isBlank()) {
-        notifications.sendSms(l.getPhone1(), b.getMessageContent());
-        count++;
+        try {
+          sms.send(l.getPhone1(), b.getMessageContent());
+          count++;
+        } catch (Exception exception) {
+          failures.add("lead " + l.getId() + ": " + safeFailure(exception));
+        }
       } else if ("EMAIL".equals(b.getChannel())
           && l.isEmailOptIn()
           && l.getEmail() != null
           && !l.getEmail().isBlank()) {
-        notifications.sendEmail(l.getEmail(), b.getName(), b.getMessageContent());
-        count++;
+        try {
+          email.send(l.getEmail(), b.getName(), b.getMessageContent());
+          count++;
+        } catch (Exception exception) {
+          failures.add("lead " + l.getId() + ": " + safeFailure(exception));
+        }
       }
     }
     b.setRecipientCount(count);
-    b.setStatus(BroadcastStatus.SENT);
-    b.setSentAt(OffsetDateTime.now());
+    b.setFailureDetails(failures.isEmpty() ? null : truncate(String.join("; ", failures), 2000));
+    b.setStatus(failures.isEmpty() ? BroadcastStatus.SENT : BroadcastStatus.FAILED);
+    b.setSentAt(failures.isEmpty() ? OffsetDateTime.now() : null);
     broadcasts.save(b);
     activity.log(
         actorId,
         ActivityType.LEAD_STAGE_CHANGED,
         "AUTOMATION",
         b.getId(),
-        "Sent broadcast to " + count + " opted-in recipients");
+        (failures.isEmpty() ? "Sent" : "Failed to fully send")
+            + " broadcast; delivered to "
+            + count
+            + " opted-in recipients");
     return b;
   }
 
@@ -204,20 +230,44 @@ public class BroadcastService {
     b.setMessageContent(r.getMessageContent());
     b.setChannel(r.getChannel());
     b.setSegmentFilter(r.getSegmentFilter() == null ? Map.of() : r.getSegmentFilter());
+    b.setContactIds(r.getContactIds());
+    validateExplicitContacts(r);
+    b.setFailureDetails(null);
     b.setScheduledAt(r.getScheduledAt());
   }
 
-  private List<Lead> recipients(Map<String, Object> filter) {
-    List<Lead> candidates = new ArrayList<>(leads.findAll());
-    if (filter == null
-        || filter.isEmpty()
-        || Boolean.TRUE.equals(filter.get("all"))
-        || "ALL".equals(filter.get("stage"))) return candidates;
+  private void validateExplicitContacts(BroadcastRequest request) {
+    Set<UUID> selected = new LinkedHashSet<>();
+    if (request.getContactIds() != null) selected.addAll(Arrays.asList(request.getContactIds()));
+    Map<String, Object> filter = request.getSegmentFilter();
+    if (filter != null) {
+      addLeadIds(selected, filter.get("leadIds"));
+      addLeadIds(selected, filter.get("lead_ids"));
+    }
+    if (selected.isEmpty()) return;
+    List<Lead> contacts = leads.findAllById(selected);
+    if (contacts.size() != selected.size()) throw new ResourceNotFoundException("Broadcast contact");
+    UUID companyId = current.get().getCompanyId();
+    if (contacts.stream().anyMatch(lead -> !Objects.equals(lead.getCompanyId(), companyId)))
+      throw new ForbiddenException("Broadcast contacts must belong to the current tenant");
+  }
+
+  private List<Lead> recipients(BroadcastMessage broadcast) {
+    Map<String, Object> filter =
+        broadcast.getSegmentFilter() == null ? Map.of() : broadcast.getSegmentFilter();
+    List<Lead> candidates =
+        leads.findAll().stream()
+            .filter(lead -> Objects.equals(lead.getCompanyId(), broadcast.getCompanyId()))
+            .toList();
+    boolean all = Boolean.TRUE.equals(filter.get("all")) || "ALL".equals(filter.get("stage"));
     Set<UUID> targeted = new LinkedHashSet<>();
+    if (broadcast.getContactIds() != null) targeted.addAll(Arrays.asList(broadcast.getContactIds()));
     addLeadIds(targeted, filter.get("leadIds"));
-    addStageLeadIds(targeted, filter.get("stages"));
-    addStageLeadIds(targeted, filter.get("stage"));
-    if (!targeted.isEmpty()) candidates.removeIf(lead -> !targeted.contains(lead.getId()));
+    addLeadIds(targeted, filter.get("lead_ids"));
+    addStageLeadIds(targeted, filter.get("stages"), broadcast.getCompanyId());
+    addStageLeadIds(targeted, filter.get("stage"), broadcast.getCompanyId());
+    if (!all && !targeted.isEmpty())
+      candidates = candidates.stream().filter(lead -> targeted.contains(lead.getId())).toList();
     Object status = filter.get("lead_status");
     if (status != null) {
       LeadStatus value;
@@ -226,7 +276,7 @@ public class BroadcastService {
       } catch (IllegalArgumentException e) {
         throw new IllegalArgumentException("Invalid lead status: " + status);
       }
-      candidates.removeIf(lead -> lead.getStatus() != value);
+      candidates = candidates.stream().filter(lead -> lead.getStatus() == value).toList();
     }
     Object priority = filter.get("priority");
     if (priority != null) {
@@ -236,14 +286,20 @@ public class BroadcastService {
       } catch (IllegalArgumentException e) {
         throw new IllegalArgumentException("Invalid lead priority: " + priority);
       }
-      candidates.removeIf(lead -> lead.getPriority() != value);
+      candidates = candidates.stream().filter(lead -> lead.getPriority() == value).toList();
     }
     if (filter.get("source") != null)
-      candidates.removeIf(
-          lead -> !Objects.equals(lead.getLeadSource(), String.valueOf(filter.get("source"))));
+      candidates =
+          candidates.stream()
+              .filter(
+                  lead -> Objects.equals(lead.getLeadSource(), String.valueOf(filter.get("source"))))
+              .toList();
     if (filter.get("category") != null)
-      candidates.removeIf(
-          lead -> !Objects.equals(lead.getCategory(), String.valueOf(filter.get("category"))));
+      candidates =
+          candidates.stream()
+              .filter(
+                  lead -> Objects.equals(lead.getCategory(), String.valueOf(filter.get("category"))))
+              .toList();
     return candidates.stream().distinct().toList();
   }
 
@@ -257,7 +313,7 @@ public class BroadcastService {
     }
   }
 
-  private void addStageLeadIds(Set<UUID> target, Object value) {
+  private void addStageLeadIds(Set<UUID> target, Object value, UUID companyId) {
     for (Object item : valuesOf(value)) {
       DealStage dealStage;
       try {
@@ -266,6 +322,7 @@ public class BroadcastService {
         throw new IllegalArgumentException("Invalid broadcast deal stage: " + item);
       }
       deals.findByStage(dealStage).stream()
+          .filter(deal -> Objects.equals(deal.getCompanyId(), companyId))
           .map(Deal::getLead)
           .filter(Objects::nonNull)
           .map(Lead::getId)
@@ -278,5 +335,15 @@ public class BroadcastService {
     if (value instanceof Collection<?> collection) return new ArrayList<>(collection);
     if (value.getClass().isArray()) return Arrays.asList((Object[]) value);
     return List.of(value);
+  }
+
+  private String safeFailure(Exception exception) {
+    String message = exception.getMessage();
+    return truncate(
+        message == null || message.isBlank() ? exception.getClass().getSimpleName() : message, 500);
+  }
+
+  private String truncate(String value, int length) {
+    return value.length() > length ? value.substring(0, length) : value;
   }
 }

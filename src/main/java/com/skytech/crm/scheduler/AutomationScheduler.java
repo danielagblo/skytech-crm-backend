@@ -47,8 +47,9 @@ public class AutomationScheduler {
                         && MonthDay.from(x.getBirthday()).equals(MonthDay.from(today)))
             .toList())
       for (Automation a : flows)
-        execution.execute(
-            a, l, "Happy birthday " + Optional.ofNullable(l.getFirstName()).orElse(""));
+        if (Objects.equals(a.getCompanyId(), l.getCompanyId()))
+          execution.execute(
+              a, l, "Happy birthday " + Optional.ofNullable(l.getFirstName()).orElse(""));
   }
 
   @Scheduled(cron = "0 0 7 * * *", zone = "${app.time-zone:Africa/Accra}")
@@ -59,7 +60,9 @@ public class AutomationScheduler {
         automations.findByAutomationTypeAndIsActiveTrue(AutomationType.PUBLIC_HOLIDAY)) {
       Object date = a.getTriggerConfig() == null ? null : a.getTriggerConfig().get("date");
       if (today.equals(String.valueOf(date)))
-        for (Lead l : leads.findAll()) execution.execute(a, l, "Season's greetings from Skytech");
+        for (Lead l : leads.findAll())
+          if (Objects.equals(a.getCompanyId(), l.getCompanyId()))
+            execution.execute(a, l, "Season's greetings from Skytech");
     }
   }
 
@@ -69,19 +72,28 @@ public class AutomationScheduler {
     String today = today().toString();
     for (Automation a :
         automations.findByAutomationTypeAndIsActiveTrue(AutomationType.PERSONAL)) {
+      if ("COMPLETED".equals(a.getExecutionState())) continue;
       Map<String, Object> triggerConfig = a.getTriggerConfig() == null ? Map.of() : a.getTriggerConfig();
       Object date = triggerConfig.get("date");
       if (!today.equals(String.valueOf(date))) continue;
-      Object contactIdsValue = triggerConfig.get("contactIds");
-      if (!(contactIdsValue instanceof Collection<?> contactIds) || contactIds.isEmpty()) continue;
-      for (Object contactId : contactIds) {
-        try {
-          UUID leadId = UUID.fromString(String.valueOf(contactId));
-          leads.findById(leadId).ifPresent(lead -> execution.execute(a, lead, a.getName()));
-        } catch (IllegalArgumentException exception) {
-          log.warn("Skipping personal automation {} because contact id {} is invalid", a.getId(), contactId);
+      int recipients = 0;
+      try {
+        UUID[] contactIds = a.getContactIds() == null ? new UUID[0] : a.getContactIds();
+        for (UUID leadId : contactIds) {
+          Lead lead = leads.findById(leadId).orElse(null);
+          if (lead != null && Objects.equals(lead.getCompanyId(), a.getCompanyId()))
+            recipients += execution.execute(a, lead, a.getName());
         }
+        a.setRecipientCount(recipients);
+        a.setExecutionState("COMPLETED");
+        a.setFailureReason(null);
+      } catch (Exception exception) {
+        a.setExecutionState("FAILED");
+        a.setFailureReason(safeFailure(exception));
       }
+      a.setLastExecutedAt(OffsetDateTime.now());
+      a.setNextRunAt(null);
+      automations.save(a);
     }
   }
 
@@ -143,5 +155,11 @@ public class AutomationScheduler {
 
   private LocalDate today() {
     return LocalDate.now(ZoneId.of(timeZone));
+  }
+
+  private String safeFailure(Exception exception) {
+    String message = exception.getMessage();
+    if (message == null || message.isBlank()) message = exception.getClass().getSimpleName();
+    return message.length() > 500 ? message.substring(0, 500) : message;
   }
 }

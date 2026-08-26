@@ -73,6 +73,9 @@ invoice:
   issuer-address: ${INVOICE_ISSUER_ADDRESS:}
   issuer-tax-id: ${INVOICE_ISSUER_TAX_ID:}
   payment-instructions: ${INVOICE_PAYMENT_INSTRUCTIONS:}
+landing-page-leads:
+  # Required when more than one tenant exists. The request is never allowed to choose its tenant.
+  company-id: ${LANDING_PAGE_LEADS_COMPANY_ID:}
 management:
   health:
     mail:

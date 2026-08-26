@@ -76,6 +76,24 @@ public class InAppNotificationService {
             "targets:" + period + ":" + user.getId()));
   }
 
+  @Transactional
+  public void notifyTaskReason(Task task, User actor, String reason) {
+    users.findAll().stream()
+        .filter(User::isActive)
+        .filter(user -> user.getRole() == Role.ADMIN || user.getRole() == Role.MANAGER)
+        .filter(user -> Objects.equals(user.getCompanyId(), actor.getCompanyId()))
+        .filter(user -> !user.getId().equals(actor.getId()))
+        .forEach(
+            user ->
+                create(
+                    user,
+                    "TASK_REASON_SUBMITTED",
+                    "Task reason submitted",
+                    actor.fullName() + " submitted a reason for " + task.getTitle() + ": " + reason,
+                    "/tasks/" + task.getId(),
+                    null));
+  }
+
   @Scheduled(cron = "0 15 7 * * *", zone = "${app.time-zone:Africa/Accra}")
   @Transactional
   public void createUpcomingInvoiceReminders() {
@@ -102,7 +120,11 @@ public class InAppNotificationService {
   }
 
   private void create(User user, String type, String title, String body, String href, String key) {
-    if (key != null && notifications.existsByUserIdAndDeduplicationKey(user.getId(), key)) return;
+    if (key != null) {
+      notifications.insertIfAbsent(
+          user.getCompanyId(), user.getId(), type, title, body, href, key);
+      return;
+    }
     InAppNotification item = new InAppNotification();
     item.setCompanyId(user.getCompanyId());
     item.setUser(user);

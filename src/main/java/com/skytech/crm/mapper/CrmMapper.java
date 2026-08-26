@@ -9,7 +9,16 @@ import org.mapstruct.*;
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface CrmMapper {
   @Mapping(target = "active", source = "active")
+  @Mapping(
+      target = "presenceStatus",
+      expression = "java(presence(value.getLastSeenAt()))")
   UserResponse user(User value);
+
+  default com.skytech.crm.enums.PresenceStatus presence(java.time.OffsetDateTime lastSeenAt) {
+    return lastSeenAt != null && lastSeenAt.isAfter(java.time.OffsetDateTime.now().minusMinutes(2))
+        ? com.skytech.crm.enums.PresenceStatus.ONLINE
+        : com.skytech.crm.enums.PresenceStatus.OFFLINE;
+  }
 
   @Mapping(target = "createdById", source = "createdBy.id")
   LeadResponse lead(Lead value);
@@ -18,6 +27,13 @@ public interface CrmMapper {
   @Mapping(target = "createdById", source = "createdBy.id")
   @Mapping(target = "assignedToId", source = "assignedTo.id")
   @Mapping(target = "paidInFull", source = "paidInFull")
+  @Mapping(target = "customerFirstName", source = "lead.firstName")
+  @Mapping(target = "customerLastName", source = "lead.lastName")
+  @Mapping(target = "customerEmail", source = "lead.email")
+  @Mapping(target = "customerPhone", source = "lead.phone1")
+  @Mapping(target = "customerCompany", source = "lead.companyName")
+  @Mapping(target = "customerAddress", source = "lead.address")
+  @Mapping(target = "customerCategory", source = "lead.category")
   DealResponse deal(Deal value);
 
   @Mapping(target = "dealId", source = "deal.id")

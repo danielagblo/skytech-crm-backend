@@ -18,6 +18,7 @@ public class SettingsService {
   private final SettingRepository settings;
   private final CurrentUserService current;
   private final ActivityService activity;
+  private final LeadAssignmentService assignments;
 
   @Transactional(readOnly = true)
   public SettingsResponse get() {
@@ -36,36 +37,32 @@ public class SettingsService {
 
   @Transactional(readOnly = true)
   public LeadAssignmentConfigResponse assignment() {
-    Setting s = one();
-    return assignmentResult(s);
+    return assignments.get();
   }
 
   @Transactional
   public LeadAssignmentConfigResponse assignment(LeadAssignmentConfigRequest request) {
-    Setting s = one();
-    s.setAutoAssignEnabled(request.enabled());
-    s.setLeadAssignmentConfig(request.config() == null ? Map.of() : request.config());
-    settings.save(s);
+    LeadAssignmentConfigResponse result = assignments.update(request);
     activity.log(
         current.id(),
         ActivityType.LEAD_STAGE_CHANGED,
         "SYSTEM",
-        s.getId(),
+        null,
         "Updated lead assignment settings");
-    return assignmentResult(s);
+    return result;
   }
 
   private Setting one() {
-    return settings.findAll().stream().findFirst().orElseGet(Setting::new);
-  }
-
-  private LeadAssignmentConfigResponse assignmentResult(Setting s) {
-    return new LeadAssignmentConfigResponse(
-        s.isAutoAssignEnabled(), Optional.ofNullable(s.getLeadAssignmentConfig()).orElse(Map.of()));
+    UUID companyId = current.get().getCompanyId();
+    return settings.findTenant(companyId).orElseGet(() -> {
+      Setting value = new Setting();
+      value.setCompanyId(companyId);
+      return value;
+    });
   }
 
   private SettingsResponse result(Setting s) {
     return new SettingsResponse(
-        Optional.ofNullable(s.getGeneralConfig()).orElse(Map.of()), assignmentResult(s));
+        Optional.ofNullable(s.getGeneralConfig()).orElse(Map.of()), assignments.get());
   }
 }

@@ -3,6 +3,7 @@ package com.skytech.crm.entity;
 import com.skytech.crm.enums.AutomationType;
 import jakarta.persistence.*;
 import java.util.*;
+import java.time.OffsetDateTime;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -21,6 +22,21 @@ public class Automation extends BaseEntity {
   private String name;
 
   private boolean isActive = true;
+
+  @JdbcTypeCode(SqlTypes.ARRAY)
+  @Column(columnDefinition = "uuid[]")
+  private UUID[] contactIds;
+
+  @Column(length = 30)
+  private String executionState = "WAITING";
+
+  private OffsetDateTime nextRunAt;
+  private OffsetDateTime lastExecutedAt;
+
+  @Column(columnDefinition = "text")
+  private String failureReason;
+
+  private int recipientCount;
 
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(columnDefinition = "jsonb")
