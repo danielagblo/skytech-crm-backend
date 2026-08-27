@@ -25,6 +25,7 @@ public record DashboardOverviewResponse(
   public record ExecutivePerformance(
       UUID userId,
       String name,
+      String profilePhotoUrl,
       long closedDeals,
       BigDecimal revenue,
       double conversionRate,

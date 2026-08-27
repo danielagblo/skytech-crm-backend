@@ -119,7 +119,7 @@ public class UserService {
     try {
       Path dir = Paths.get("uploads", "profiles").toAbsolutePath().normalize();
       Files.createDirectories(dir);
-      Path target = dir.resolve(id + ext).normalize();
+      Path target = dir.resolve(id + "-" + UUID.randomUUID() + ext).normalize();
       if (!target.startsWith(dir)) throw new IllegalArgumentException("Invalid file name");
       file.transferTo(target);
       User u = findTenant(id, me);

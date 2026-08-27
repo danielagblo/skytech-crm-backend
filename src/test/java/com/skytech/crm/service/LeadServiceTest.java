@@ -68,8 +68,8 @@ class LeadServiceTest {
   @Test
   void acceptsMultipleAssigneesAndLegacyIndustryWhileCreatingOneDeal() {
     User manager = user(Role.MANAGER, OffsetDateTime.now().minusYears(1));
-    User first = user(Role.AGENT, OffsetDateTime.now().minusMonths(2));
-    User second = user(Role.AGENT, OffsetDateTime.now().minusMonths(1));
+    User first = user(Role.MANAGER, OffsetDateTime.now().minusMonths(2));
+    User second = user(Role.ADMIN, OffsetDateTime.now().minusMonths(1));
     when(current.get()).thenReturn(manager);
     when(users.findAllById(anyCollection())).thenReturn(List.of(first, second));
     when(users.findById(first.getId())).thenReturn(Optional.of(first));
@@ -150,12 +150,13 @@ class LeadServiceTest {
   }
 
   @Test
-  void rejectsManualAssigneesThatAreNotActiveAgentsInTheTenant() {
+  void rejectsManualAssigneesThatAreNotActiveUsersInTheTenant() {
     UUID tenantId = UUID.randomUUID();
     User manager = user(Role.MANAGER, OffsetDateTime.now());
     manager.setCompanyId(tenantId);
-    User invalidAssignee = user(Role.MANAGER, OffsetDateTime.now());
+    User invalidAssignee = user(Role.AGENT, OffsetDateTime.now());
     invalidAssignee.setCompanyId(tenantId);
+    invalidAssignee.setActive(false);
     when(current.get()).thenReturn(manager);
     when(users.findAllById(anyCollection())).thenReturn(List.of(invalidAssignee));
 
@@ -164,7 +165,7 @@ class LeadServiceTest {
                 service.create(
                     emptyLead().setAssignedTo(new UUID[] {invalidAssignee.getId()})))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("active agent");
+        .hasMessageContaining("active user");
 
     verifyNoInteractions(deals);
     verify(assignments, never()).selectIfEnabled();

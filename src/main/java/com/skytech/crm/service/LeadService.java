@@ -203,9 +203,7 @@ public class LeadService {
     if (auto) {
       l.setAssignedTo(new UUID[] {assignments.selectAgent()});
     } else {
-      if (ids != null)
-        for (UUID uid : ids)
-          if (!users.existsById(uid)) throw new ResourceNotFoundException("User");
+      validateAssignees(ids);
       l.setAssignedTo(ids);
     }
     leads.save(l);
@@ -279,11 +277,10 @@ public class LeadService {
     for (UUID id : requested) {
       User user = found.get(id);
       if (user == null) throw new ResourceNotFoundException("Assignee");
-      if (user.getRole() != Role.AGENT
-          || !user.isActive()
+      if (!user.isActive()
           || !Objects.equals(user.getCompanyId(), companyId))
         throw new IllegalArgumentException(
-            "Every assignedTo entry must be an active agent in the current tenant");
+            "Every assignedTo entry must be an active user in the current tenant");
     }
   }
 

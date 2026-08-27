@@ -336,6 +336,7 @@ public class DashboardService {
   private record AgentMetric(
       UUID userId,
       String name,
+      String profilePhotoUrl,
       long deals,
       long closed,
       BigDecimal revenue,
@@ -378,6 +379,7 @@ public class DashboardService {
           new AgentMetric(
               u.getId(),
               u.fullName(),
+              u.getProfilePhotoUrl(),
               assigned.size(),
               closed,
               revenue(u.getId()),
@@ -439,6 +441,7 @@ public class DashboardService {
           new DashboardOverviewResponse.ExecutivePerformance(
               m.userId(),
               m.name(),
+              m.profilePhotoUrl(),
               m.closed(),
               m.revenue(),
               Math.round(rawConversion * 100.0) / 100.0,
@@ -456,6 +459,7 @@ public class DashboardService {
           new DashboardOverviewResponse.ExecutivePerformance(
               p.userId(),
               p.name(),
+              p.profilePhotoUrl(),
               p.closedDeals(),
               p.revenue(),
               p.conversionRate(),

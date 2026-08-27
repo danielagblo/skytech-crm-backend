@@ -94,6 +94,7 @@ public interface CrmMapper {
         c.getParentComment() == null ? null : c.getParentComment().getId(),
         c.getAuthor() == null ? null : c.getAuthor().getId(),
         c.getAuthor() == null ? null : c.getAuthor().fullName(),
+        c.getAuthor() == null ? null : c.getAuthor().getProfilePhotoUrl(),
         c.getBody(),
         c.getCreatedAt());
   }
@@ -104,6 +105,7 @@ public interface CrmMapper {
         c.getParentComment() == null ? null : c.getParentComment().getId(),
         c.getAuthor() == null ? null : c.getAuthor().getId(),
         c.getAuthor() == null ? null : c.getAuthor().fullName(),
+        c.getAuthor() == null ? null : c.getAuthor().getProfilePhotoUrl(),
         c.getBody(),
         c.getCreatedAt());
   }

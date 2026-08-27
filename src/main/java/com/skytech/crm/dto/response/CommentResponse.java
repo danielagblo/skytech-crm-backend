@@ -8,5 +8,6 @@ public record CommentResponse(
     UUID parentCommentId,
     UUID authorId,
     String authorName,
+    String authorProfilePhotoUrl,
     String body,
     OffsetDateTime createdAt) {}
