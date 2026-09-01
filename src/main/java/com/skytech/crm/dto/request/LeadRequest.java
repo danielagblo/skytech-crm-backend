@@ -1,6 +1,8 @@
 package com.skytech.crm.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.skytech.crm.config.FlexibleBirthdayDeserializer;
 import com.skytech.crm.enums.*;
 import jakarta.validation.constraints.*;
 import java.time.LocalDate;
@@ -16,6 +18,7 @@ import lombok.experimental.Accessors;
 public class LeadRequest {
   private UUID[] assignedTo;
 
+  @NotBlank
   @Size(max = 100)
   private String firstName;
 
@@ -26,7 +29,8 @@ public class LeadRequest {
   @Size(max = 255)
   private String email;
 
-  @Size(max = 30)
+  @NotBlank
+  @Size(min = 7, max = 30)
   private String phone1;
 
   @Size(max = 30)
@@ -60,6 +64,8 @@ public class LeadRequest {
 
   private Boolean hasPublicOffice;
   private Boolean meetingArranged;
+  @NotNull
+  @JsonDeserialize(using = FlexibleBirthdayDeserializer.class)
   private LocalDate birthday;
   private Boolean smsOptIn;
   private Boolean emailOptIn;

@@ -31,6 +31,7 @@ public class UserService {
   private final FeatureGateService gates;
   private final ActivityService activity;
   private final UserSessionService sessions;
+  private final RatingRepository ratings;
 
   @PreAuthorize("isAuthenticated()")
   @Transactional(readOnly = true)
@@ -47,7 +48,9 @@ public class UserService {
                     b.like(b.lower(r.get("email")), "%" + search.toLowerCase() + "%"));
           return b.and(tenant, searchPredicate);
         };
-    return users.findAll(s, p).map(mapper::user);
+    Page<User> page = users.findAll(s, p);
+    Map<UUID, RatingSummary> summaries = ratingSummaries(page.getContent(), companyId);
+    return page.map(user -> response(user, summaries.get(user.getId())));
   }
 
   @PreAuthorize("hasRole('ADMIN')")
@@ -74,7 +77,7 @@ public class UserService {
     User me = current.get();
     if (me.getRole() == Role.AGENT && !me.getId().equals(id))
       throw new ForbiddenException("Agents may only view their own profile");
-    return mapper.user(findTenant(id, me));
+    return response(findTenant(id, me));
   }
 
   @PreAuthorize("hasRole('ADMIN')")
@@ -223,6 +226,57 @@ public class UserService {
     sessions.heartbeat(user);
     return mapper.user(user);
   }
+
+  private UserResponse response(User user) {
+    return response(
+        user,
+        ratingSummaries(List.of(user), user.getCompanyId()).get(user.getId()));
+  }
+
+  private UserResponse response(User user, RatingSummary summary) {
+    UserResponse base = mapper.user(user);
+    return new UserResponse(
+        base.id(),
+        base.companyId(),
+        base.firstName(),
+        base.lastName(),
+        base.email(),
+        base.phone(),
+        base.username(),
+        base.role(),
+        base.planTier(),
+        base.profilePhotoUrl(),
+        base.active(),
+        base.lastLogin(),
+        base.lastSeenAt(),
+        base.presenceStatus(),
+        summary == null ? null : summary.average(),
+        summary == null ? 0 : summary.count(),
+        base.createdAt());
+  }
+
+  private Map<UUID, RatingSummary> ratingSummaries(List<User> values, UUID companyId) {
+    if (values.isEmpty()) return Map.of();
+    Set<UUID> ids = new HashSet<>();
+    values.forEach(user -> ids.add(user.getId()));
+    Map<UUID, DoubleSummaryStatistics> grouped = new HashMap<>();
+    ratings.findByCompanyIdAndAgentIdInAndRatedTrueAndRatingIsNotNull(companyId, ids)
+        .forEach(
+            rating ->
+                grouped
+                    .computeIfAbsent(rating.getAgent().getId(), ignored -> new DoubleSummaryStatistics())
+                    .accept(rating.getRating()));
+    Map<UUID, RatingSummary> result = new HashMap<>();
+    grouped.forEach(
+        (id, stats) ->
+            result.put(
+                id,
+                new RatingSummary(
+                    Math.round(stats.getAverage() * 100.0) / 100.0, stats.getCount())));
+    return result;
+  }
+
+  private record RatingSummary(double average, long count) {}
 
   private void apply(User u, UserRequest r, boolean creating) {
     u.setFirstName(r.getFirstName());

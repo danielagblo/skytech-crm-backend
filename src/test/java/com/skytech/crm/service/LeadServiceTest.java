@@ -10,6 +10,7 @@ import com.skytech.crm.entity.*;
 import com.skytech.crm.enums.*;
 import com.skytech.crm.mapper.CrmMapper;
 import com.skytech.crm.repository.*;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -194,6 +195,8 @@ class LeadServiceTest {
   private LeadRequest emptyLead() {
     return new CreateLeadRequest()
         .setFirstName("Jane")
+        .setPhone1("5551234567")
+        .setBirthday(LocalDate.of(2000, 2, 23))
         .setLastName("Doe")
         .setEmail("jane@example.com")
         .setCompanyName("Example Ltd")

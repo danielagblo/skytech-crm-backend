@@ -12,5 +12,8 @@ public interface RatingRepository extends JpaRepository<Rating, UUID> {
 
   List<Rating> findByAgentIdOrderByCreatedAtDesc(UUID agentId);
 
+  List<Rating> findByCompanyIdAndAgentIdInAndRatedTrueAndRatingIsNotNull(
+      UUID companyId, Collection<UUID> agentIds);
+
   List<Rating> findByDealIdOrderByCreatedAtDesc(UUID dealId);
 }

@@ -19,4 +19,6 @@ public record UserResponse(
     OffsetDateTime lastLogin,
     OffsetDateTime lastSeenAt,
     PresenceStatus presenceStatus,
+    Double clientRatingAverage,
+    long clientRatingCount,
     OffsetDateTime createdAt) {}
