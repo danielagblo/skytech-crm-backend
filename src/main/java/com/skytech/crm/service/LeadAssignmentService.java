@@ -35,12 +35,12 @@ public class LeadAssignmentService {
     return result(settings.save(setting));
   }
 
-  @Transactional
+  @Transactional(noRollbackFor = IllegalArgumentException.class)
   public Optional<UUID> selectIfEnabled() {
     return selectIfEnabled(current.get().getCompanyId());
   }
 
-  @Transactional
+  @Transactional(noRollbackFor = IllegalArgumentException.class)
   public Optional<UUID> selectIfEnabled(UUID companyId) {
     Setting setting = findSetting(companyId);
     return setting.isAutoAssignEnabled() ? Optional.of(select(setting)) : Optional.empty();
