@@ -11,6 +11,7 @@ import org.springframework.web.filter.CorsFilter;
 @Configuration
 public class CorsConfig {
   @Bean
+  @Primary
   CorsConfigurationSource corsConfigurationSource(
       @Value("${cors.allowed-origins}") String origins) {
     CorsConfiguration c = new CorsConfiguration();
