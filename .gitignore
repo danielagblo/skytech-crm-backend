@@ -6,3 +6,7 @@ target/
 uploads/
 migrate.ps1
 migrate.sh
+AddAdmin.java
+seed-admin.sql
+add-admin.ps1
+add-admin.sh

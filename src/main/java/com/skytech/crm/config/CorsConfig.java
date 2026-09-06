@@ -10,7 +10,13 @@ public class CorsConfig {
   @Bean
   CorsConfigurationSource cors(@Value("${cors.allowed-origins}") String origins) {
     CorsConfiguration c = new CorsConfiguration();
-    c.setAllowedOrigins(Arrays.stream(origins.split(",")).map(String::trim).toList());
+    var allowed =
+        Arrays.stream(origins.split(","))
+            .map(String::trim)
+            .map(o -> o.replaceAll("^\"+|\"+$", ""))
+            .filter(o -> !o.isEmpty())
+            .toList();
+    c.setAllowedOrigins(allowed);
     c.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
     c.setAllowedHeaders(List.of("*"));
     c.setAllowCredentials(true);
