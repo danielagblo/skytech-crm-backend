@@ -21,6 +21,9 @@ public interface CrmMapper {
   }
 
   @Mapping(target = "createdById", source = "createdBy.id")
+  @Mapping(
+      target = "assignedTo",
+      expression = "java(value.getAssignedTo() == null ? new java.util.UUID[0] : value.getAssignedTo())")
   LeadResponse lead(Lead value);
 
   @Mapping(target = "leadId", source = "lead.id")
