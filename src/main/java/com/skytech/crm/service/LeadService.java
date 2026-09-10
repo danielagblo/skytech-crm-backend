@@ -41,6 +41,7 @@ public class LeadService {
   private final FeatureGateService gates;
   private final ActivityService activity;
   private final CrmMapper mapper;
+  private final LeadViewService leadViews;
 
   @Transactional(readOnly = true)
   public Page<LeadResponse> list(
@@ -79,7 +80,10 @@ public class LeadService {
                         "array_position", Integer.class, r.get("assignedTo"), b.literal(target))));
           return b.and(x.toArray(Predicate[]::new));
         };
-    return leads.findAll(s, p).map(mapper::lead);
+    var page = leads.findAll(s, p);
+    var resp = page.map(mapper::lead);
+    // attach seen info lazily: not included in DTO but serve seen via separate endpoint or client-side
+    return resp;
   }
 
   @Transactional
@@ -115,6 +119,18 @@ public class LeadService {
     Lead l = find(id);
     checkOwn(l);
     return mapper.lead(l);
+  }
+
+  @Transactional
+  public void markSeen(UUID id) {
+    User me = current.get();
+    leadViews.markSeen(id, me.getId());
+  }
+
+  @Transactional(readOnly = true)
+  public List<UUID> seenForCurrentUser(Collection<UUID> leadIds) {
+    User me = current.get();
+    return leadViews.seenForUser(me.getId(), leadIds == null ? List.of() : leadIds);
   }
 
   @Transactional

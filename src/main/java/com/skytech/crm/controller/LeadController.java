@@ -59,6 +59,18 @@ public class LeadController extends BaseController {
     return ok(leads.update(id, r));
   }
 
+  @PutMapping("/{id}/seen")
+  ApiResponse<Void> markSeen(@PathVariable UUID id) {
+    leads.markSeen(id);
+    return done("Marked seen");
+  }
+
+  @GetMapping("/seen")
+  ApiResponse<?> seen(@RequestParam(required = false) List<UUID> leadIds) {
+    var seen = leads.seenForCurrentUser(leadIds == null ? List.of() : leadIds);
+    return ok(seen);
+  }
+
   @DeleteMapping("/{id}")
   ApiResponse<Void> delete(@PathVariable UUID id) {
     leads.delete(id);
