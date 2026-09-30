@@ -113,7 +113,7 @@ docker run --rm -p 8080:8080 --env-file .env skytech-crm-backend
 
 ## Operational notes
 
-- Profile images are stored beneath `uploads/profiles`; mount persistent storage there in a container deployment or replace that adapter with object storage.
+- Profile images are converted to optimized Base64 data URIs and stored directly in the database (`profile_photo_url`), requiring no local ephemeral volume mounts.
 - Soft-deleted users, leads, and deals are automatically excluded by Hibernate restrictions.
 - Deal and task updates support optimistic-lock versions.
 - Automation jobs run at 07:00 and 08:00 daily, hourly, every 15 minutes, and midnight using `APP_TIME_ZONE` (default `Africa/Accra`).
@@ -164,7 +164,7 @@ Complete every item below before exposing the API to real users.
 
    Log in through the OTP flow, create named administrator accounts through the API, then remove or rotate the temporary bootstrap credentials. Never ship a shared default administrator password.
 
-9. **Provide durable profile-photo storage.** The current adapter writes to `/app/uploads/profiles`. In Docker or a container platform, mount a persistent writable volume at `/app/uploads` owned by UID `10001`; otherwise photos disappear when the container is replaced. For multi-instance deployment, replace the local adapter with shared object storage before scaling horizontally.
+9. **Durable profile-photo storage.** Photos are processed and persisted directly to the database as Base64 data URIs on the `profile_photo_url` column, ensuring images persist across container restarts, deploys, and scaling instances without external disk volumes.
 
 10. **Deploy behind HTTPS.** Build with `docker build -t skytech-crm-backend .`, deploy the immutable image, expose only the reverse proxy/load balancer publicly, terminate TLS with a valid certificate, and forward requests to port `8080`. Redirect HTTP to HTTPS and restrict database access to the application environment.
 

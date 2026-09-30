@@ -109,30 +109,67 @@ public class UserService {
       throw new ForbiddenException("Not allowed");
     if (file.isEmpty() || file.getContentType() == null)
       throw new IllegalArgumentException("An image file is required");
-    String ext =
-        switch (file.getContentType().toLowerCase()) {
-          case "image/jpeg" -> ".jpg";
-          case "image/png" -> ".png";
-          case "image/webp" -> ".webp";
-          case "image/gif" -> ".gif";
-          default ->
-              throw new IllegalArgumentException(
-                  "Only JPEG, PNG, WebP, and GIF images are supported");
-        };
+    String contentType = file.getContentType().toLowerCase();
+    if (!contentType.equals("image/jpeg") && !contentType.equals("image/jpg")
+        && !contentType.equals("image/png") && !contentType.equals("image/webp")
+        && !contentType.equals("image/gif")) {
+      throw new IllegalArgumentException(
+          "Only JPEG, PNG, WebP, and GIF images are supported");
+    }
     try {
-      Path dir = Paths.get("uploads", "profiles").toAbsolutePath().normalize();
-      Files.createDirectories(dir);
-      Path target = dir.resolve(id + "-" + UUID.randomUUID() + ext).normalize();
-      if (!target.startsWith(dir)) throw new IllegalArgumentException("Invalid file name");
-      file.transferTo(target);
+      byte[] bytes = file.getBytes();
+      // If image is larger than 250KB and ImageIO can process it, resize to maximum 512x512
+      if (bytes.length > 250 * 1024) {
+        try {
+          java.awt.image.BufferedImage original =
+              javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+          if (original != null) {
+            int maxDim = 512;
+            int width = original.getWidth();
+            int height = original.getHeight();
+            if (width > maxDim || height > maxDim) {
+              double scale = Math.min((double) maxDim / width, (double) maxDim / height);
+              int newW = Math.max(1, (int) Math.round(width * scale));
+              int newH = Math.max(1, (int) Math.round(height * scale));
+              int imageType =
+                  (contentType.contains("png") && original.getColorModel().hasAlpha())
+                      ? java.awt.image.BufferedImage.TYPE_INT_ARGB
+                      : java.awt.image.BufferedImage.TYPE_INT_RGB;
+              java.awt.image.BufferedImage resized =
+                  new java.awt.image.BufferedImage(newW, newH, imageType);
+              java.awt.Graphics2D g = resized.createGraphics();
+              g.setRenderingHint(
+                  java.awt.RenderingHints.KEY_INTERPOLATION,
+                  java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+              g.setRenderingHint(
+                  java.awt.RenderingHints.KEY_RENDERING,
+                  java.awt.RenderingHints.VALUE_RENDER_QUALITY);
+              g.setRenderingHint(
+                  java.awt.RenderingHints.KEY_ANTIALIASING,
+                  java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+              g.drawImage(original, 0, 0, newW, newH, null);
+              g.dispose();
+              java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+              String formatName = contentType.contains("png") ? "png" : "jpg";
+              javax.imageio.ImageIO.write(resized, formatName, baos);
+              bytes = baos.toByteArray();
+              contentType = contentType.contains("png") ? "image/png" : "image/jpeg";
+            }
+          }
+        } catch (Exception ignored) {
+          // If resizing fails or format isn't supported by ImageIO, fall back to original bytes
+        }
+      }
+      String base64 = Base64.getEncoder().encodeToString(bytes);
+      String dataUri = "data:" + contentType + ";base64," + base64;
       User u = findTenant(id, me);
-      u.setProfilePhotoUrl("/uploads/profiles/" + target.getFileName());
+      u.setProfilePhotoUrl(dataUri);
       users.save(u);
       activity.log(
           me.getId(), ActivityType.LEAD_STAGE_CHANGED, "SYSTEM", id, "Updated profile photo");
       return mapper.user(u);
     } catch (IOException e) {
-      throw new IllegalStateException("Unable to store profile photo", e);
+      throw new IllegalStateException("Unable to process profile photo", e);
     }
   }
 
